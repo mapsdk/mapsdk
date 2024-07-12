@@ -1,0 +1,9 @@
+[package]
+name = "hello_window"
+edition = "2021"
+
+[dependencies]
+mapsdk = { path = "../../mapsdk" }
+env_logger.workspace = true
+winit.workspace = true
+pollster.workspace = true
