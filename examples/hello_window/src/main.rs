@@ -2,12 +2,15 @@ extern crate mapsdk;
 
 use mapsdk::{
     common::Color,
+    geo::Coord,
+    layer::{ImageCoords, ImageLayer},
     map::{Map, MapOptions},
     render::{Renderer, RendererOptions, RendererType},
 };
 use winit::{
     application::ApplicationHandler,
-    event::WindowEvent,
+    dpi::LogicalSize,
+    event::{MouseScrollDelta, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::{Window, WindowId},
 };
@@ -18,15 +21,32 @@ struct App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if let Ok(window) = event_loop
-            .create_window(Window::default_attributes().with_title("MapSDK - Hello Window"))
-        {
-            let background_color = self.map.get_options().get_background_color().clone();
+        if let Ok(window) = event_loop.create_window(
+            Window::default_attributes()
+                .with_title("MapSDK - Hello Window")
+                .with_inner_size(LogicalSize::new(800.0, 500.0)),
+        ) {
+            let background_color = self.map.options().background_color().clone();
             let renderer = pollster::block_on(Renderer::new(
                 RendererType::Window(window.into()),
                 &RendererOptions::default().with_background_color(background_color.into()),
             ));
             self.map.set_renderer(renderer);
+
+            let headers = vec![("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"),("Accept", "image/webp,image/apng,image/*,*/*;q=0.8"),("Accept-Encoding", "gzip, deflate, br")];
+
+            let layer = ImageLayer::new(
+                "http://a.tile.osm.org/0/0/0.png",
+                headers,
+                ImageCoords {
+                    lt: Coord::new(-20037508.34278924, 20037508.34278924),
+                    lb: Coord::new(-20037508.34278924, -20037508.34278924),
+                    rt: Coord::new(20037508.34278924, 20037508.34278924),
+                    rb: Coord::new(20037508.34278924, -20037508.34278924),
+                },
+            );
+            let _ = self.map.add_layer(Box::new(layer));
+
             self.map.redraw();
         }
     }
@@ -42,6 +62,16 @@ impl ApplicationHandler for App {
             WindowEvent::Resized(size) => {
                 self.map.resize(size.width, size.height);
             }
+            WindowEvent::MouseWheel { delta, .. } => match delta {
+                MouseScrollDelta::LineDelta(_, y) => {
+                    let scale = 2.0_f64.powf((y / 20.0).into());
+                    self.map.zoom_by(scale);
+                }
+                MouseScrollDelta::PixelDelta(p) => {
+                    let scale = 2.0_f64.powf(p.y / 20.0);
+                    self.map.zoom_by(scale);
+                }
+            },
             _ => (),
         }
     }

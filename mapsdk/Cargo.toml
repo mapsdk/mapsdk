@@ -4,5 +4,17 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+async-trait.workspace = true
+bytemuck.workspace = true
+dashmap.workspace = true
+env_logger.workspace = true
+glam.workspace = true
+image.workspace = true
+log.workspace = true
+nanoid.workspace = true
+pollster.workspace = true
+rayon.workspace = true
+reqwest.workspace = true
+tokio.workspace = true
 wgpu.workspace = true
 winit.workspace = true

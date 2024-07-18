@@ -1,42 +1,148 @@
-use std::borrow::Cow;
+use dashmap::DashMap;
+use wgpu::*;
 
-use wgpu::{
-    Adapter, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Features, FragmentState,
-    Instance, Limits, LoadOp, Operations, PowerPreference, PrimitiveState, Queue,
-    RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor,
-    RequestAdapterOptions, ShaderSource, StoreOp, Surface, TextureViewDescriptor, VertexState,
+use crate::{
+    common::PixelSize,
+    layer::ImageCoords,
+    map::MapState,
+    render::{
+        camera::Camera,
+        draw::DrawItem,
+        resources::{
+            layout::{create_image_params_bgl, create_image_texture_bgl},
+            pipeline::create_image_pipeline,
+            texture::create_texture_from_image,
+        },
+        targets::Window,
+    },
 };
 
-use crate::render::targets::Window;
-
-pub mod targets;
+pub(crate) mod camera;
+pub(crate) mod draw;
+pub(crate) mod resources;
+pub(crate) mod targets;
 
 pub struct Renderer {
     renderer_options: RendererOptions,
 
-    rendering_size: RenderingSize,
-    rendering_target: RenderingTarget,
+    rendering_size: PixelSize,
+    rendering_context: RenderingContext,
+    rendering_resources: RenderingResources,
+
+    camera: Camera,
+    draw_items: DashMap<String, DrawItem>,
 }
 
 impl Renderer {
-    pub fn redraw(&self) {
-        let RenderingTarget {
+    pub async fn new(renderer_type: RendererType, renderer_options: &RendererOptions) -> Self {
+        match renderer_type {
+            RendererType::Window(window) => {
+                let width = window.width();
+                let height = window.height();
+
+                let instance = Instance::default();
+                let surface = instance
+                    .create_surface(window.handle())
+                    .expect("Failed to create surface");
+                let adapter = instance
+                    .request_adapter(&RequestAdapterOptions {
+                        power_preference: PowerPreference::default(),
+                        force_fallback_adapter: false,
+                        compatible_surface: Some(&surface),
+                    })
+                    .await
+                    .expect("Failed to find adapter");
+                let (device, queue) = adapter
+                    .request_device(
+                        &DeviceDescriptor {
+                            required_features: Features::empty(),
+                            required_limits: if cfg!(target_arch = "wasm32") {
+                                Limits::downlevel_webgl2_defaults()
+                                    .using_resolution(adapter.limits())
+                            } else {
+                                Limits::default().using_resolution(adapter.limits())
+                            },
+                            memory_hints: Default::default(),
+                            label: None,
+                        },
+                        None,
+                    )
+                    .await
+                    .expect("Failed to find device");
+                if let Some(config) = surface.get_default_config(&adapter, width, height) {
+                    surface.configure(&device, &config);
+                }
+
+                let rendering_context = RenderingContext {
+                    surface,
+                    adapter,
+                    device,
+                    queue,
+                };
+
+                let rendering_resources = RenderingResources {
+                    image_pipeline: create_image_pipeline(&rendering_context),
+                    image_sampler: rendering_context.device.create_sampler(&SamplerDescriptor {
+                        address_mode_u: AddressMode::ClampToEdge,
+                        address_mode_v: AddressMode::ClampToEdge,
+                        address_mode_w: AddressMode::ClampToEdge,
+                        mag_filter: FilterMode::Linear,
+                        min_filter: FilterMode::Nearest,
+                        mipmap_filter: FilterMode::Nearest,
+                        ..Default::default()
+                    }),
+                };
+
+                let camera = Camera::default()
+                    .with_eye(0.0, 0.0, height as f32 / 2.0)
+                    .with_aspect(width as f32 / height as f32)
+                    .update_view_proj();
+
+                Self {
+                    renderer_options: renderer_options.clone(),
+
+                    rendering_size: PixelSize::new(width, height),
+                    rendering_context,
+                    rendering_resources,
+
+                    camera,
+                    draw_items: DashMap::new(),
+                }
+            }
+        }
+    }
+
+    pub fn width(&self) -> u32 {
+        self.rendering_size.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.rendering_size.height
+    }
+
+    pub fn set_draw_item(&mut self, id: &str, draw_item: DrawItem) {
+        self.draw_items.insert(id.to_string(), draw_item);
+    }
+
+    pub fn render(&mut self, map_state: &MapState) {
+        let RenderingContext {
             surface,
             device,
             queue,
-            render_pipeline,
             ..
-        } = &self.rendering_target;
+        } = &self.rendering_context;
 
-        if let Ok(frame) = surface.get_current_texture() {
-            let view = frame.texture.create_view(&TextureViewDescriptor::default());
-            let mut encoder =
+        if let Ok(surface_texture) = surface.get_current_texture() {
+            let surface_view = surface_texture
+                .texture
+                .create_view(&TextureViewDescriptor::default());
+            let mut command_encoder =
                 device.create_command_encoder(&CommandEncoderDescriptor { label: None });
             {
-                let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
                     label: None,
                     color_attachments: &[Some(RenderPassColorAttachment {
-                        view: &view,
+                        view: &surface_view,
                         resolve_target: None,
                         ops: Operations {
                             load: LoadOp::Clear(self.renderer_options.background_color),
@@ -47,31 +153,38 @@ impl Renderer {
                     timestamp_writes: None,
                     occlusion_query_set: None,
                 });
-                render_pass.set_pipeline(&render_pipeline);
-                render_pass.draw(0..3, 0..1);
+
+                self.draw_items.iter_mut().for_each(|draw_item| {
+                    (*draw_item).draw(map_state, self, &mut render_pass);
+                });
             }
 
-            queue.submit(Some(encoder.finish()));
-            frame.present();
+            queue.submit(Some(command_encoder.finish()));
+            surface_texture.present();
         }
     }
 
-    pub fn resize(&mut self, width: u32, height: u32) {
+    pub fn resize(&mut self, width: u32, height: u32, map_state: &MapState) {
         self.rendering_size.width = width;
         self.rendering_size.height = height;
 
-        let RenderingTarget {
+        self.camera
+            .with_eye(0.0, 0.0, height as f32 / 2.0)
+            .with_aspect(width as f32 / height as f32)
+            .update_view_proj();
+
+        let RenderingContext {
             surface,
             adapter,
             device,
             ..
-        } = &self.rendering_target;
+        } = &self.rendering_context;
 
         if let Some(config) = surface.get_default_config(&adapter, width, height) {
             surface.configure(&device, &config);
         }
 
-        self.redraw();
+        self.render(&map_state);
     }
 }
 
@@ -104,132 +217,14 @@ pub enum RendererType {
     Window(Window),
 }
 
-impl Renderer {
-    pub async fn new(renderer_type: RendererType, renderer_options: &RendererOptions) -> Self {
-        match renderer_type {
-            RendererType::Window(window) => {
-                let width = window.get_width();
-                let height = window.get_height();
-
-                let instance = Instance::default();
-                let surface = instance
-                    .create_surface(window.get_handle())
-                    .expect("Failed to create surface");
-                let adapter = instance
-                    .request_adapter(&RequestAdapterOptions {
-                        power_preference: PowerPreference::default(),
-                        force_fallback_adapter: false,
-                        compatible_surface: Some(&surface),
-                    })
-                    .await
-                    .expect("Failed to find adapter");
-                let (device, queue) = adapter
-                    .request_device(
-                        &DeviceDescriptor {
-                            label: None,
-                            required_features: Features::empty(),
-                            required_limits: Limits::downlevel_webgl2_defaults()
-                                .using_resolution(adapter.limits()),
-                        },
-                        None,
-                    )
-                    .await
-                    .expect("Failed to find device");
-                let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                    label: None,
-                    source: ShaderSource::Wgsl(Cow::Borrowed(
-                        "@vertex
-fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4<f32> {
-    let x = f32(i32(in_vertex_index) - 1);
-    let y = f32(i32(in_vertex_index & 1u) * 2 - 1);
-    return vec4<f32>(x, y, 0.0, 1.0);
+pub(crate) struct RenderingResources {
+    image_pipeline: RenderPipeline,
+    image_sampler: Sampler,
 }
 
-@fragment
-fn fs_main() -> @location(0) vec4<f32> {
-    return vec4<f32>(1.0, 0.0, 0.0, 1.0);
-}
-",
-                    )),
-                });
-
-                let pipeline_layout =
-                    device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                        label: None,
-                        bind_group_layouts: &[],
-                        push_constant_ranges: &[],
-                    });
-
-                let swapchain_capabilities = surface.get_capabilities(&adapter);
-                let swapchain_format = swapchain_capabilities.formats[0];
-
-                let render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-                    label: None,
-                    layout: Some(&pipeline_layout),
-                    vertex: VertexState {
-                        module: &shader,
-                        entry_point: "vs_main",
-                        buffers: &[],
-                        compilation_options: Default::default(),
-                    },
-                    fragment: Some(FragmentState {
-                        module: &shader,
-                        entry_point: "fs_main",
-                        compilation_options: Default::default(),
-                        targets: &[Some(swapchain_format.into())],
-                    }),
-                    primitive: PrimitiveState::default(),
-                    depth_stencil: None,
-                    multisample: wgpu::MultisampleState::default(),
-                    multiview: None,
-                });
-
-                if let Some(config) = surface.get_default_config(&adapter, width, height) {
-                    surface.configure(&device, &config);
-                }
-
-                let rendering_target = RenderingTarget {
-                    surface,
-                    adapter,
-                    device,
-                    queue,
-                    render_pipeline,
-                };
-
-                Self {
-                    renderer_options: renderer_options.clone(),
-
-                    rendering_size: RenderingSize::new(width, height),
-                    rendering_target,
-                }
-            }
-        }
-    }
-
-    pub fn get_width(&self) -> u32 {
-        self.rendering_size.width
-    }
-
-    pub fn get_height(&self) -> u32 {
-        self.rendering_size.height
-    }
-}
-
-struct RenderingSize {
-    pub width: u32,
-    pub height: u32,
-}
-
-impl RenderingSize {
-    pub fn new(width: u32, height: u32) -> Self {
-        Self { width, height }
-    }
-}
-
-struct RenderingTarget {
+pub(crate) struct RenderingContext {
     surface: Surface<'static>,
     adapter: Adapter,
     device: Device,
     queue: Queue,
-    render_pipeline: RenderPipeline,
 }

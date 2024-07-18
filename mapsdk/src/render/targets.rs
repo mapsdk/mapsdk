@@ -17,15 +17,15 @@ impl From<winit::window::Window> for Window {
 }
 
 impl Window {
-    pub fn get_handle(self) -> Box<dyn wgpu::WindowHandle> {
+    pub fn handle(self) -> Box<dyn wgpu::WindowHandle> {
         self.handle
     }
 
-    pub fn get_width(&self) -> u32 {
+    pub fn width(&self) -> u32 {
         self.width
     }
 
-    pub fn get_height(&self) -> u32 {
+    pub fn height(&self) -> u32 {
         self.height
     }
 }
