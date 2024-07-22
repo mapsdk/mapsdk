@@ -20,4 +20,5 @@ pub(crate) mod http;
 pub mod layer;
 pub mod map;
 pub mod render;
+pub mod tiling;
 pub mod utils;

@@ -43,10 +43,10 @@ impl ImageDrawable {
         );
 
         let vertices = [
-            [coords.lt.x() as f32, coords.lt.y() as f32],
-            [coords.lb.x() as f32, coords.lb.y() as f32],
-            [coords.rt.x() as f32, coords.rt.y() as f32],
-            [coords.rb.x() as f32, coords.rb.y() as f32],
+            [coords.lt.x as f32, coords.lt.y as f32],
+            [coords.lb.x as f32, coords.lb.y as f32],
+            [coords.rt.x as f32, coords.rt.y as f32],
+            [coords.rb.x as f32, coords.rb.y as f32],
         ];
 
         let vertex_buffer = create_vertex_buffer_from_vec2_f32_slice(
@@ -116,13 +116,13 @@ impl Drawable for ImageDrawable {
         let map_center_buffer = create_uniform_buffer_from_f32_slice(
             rendering_context,
             "Image map center buffer",
-            &[map_state.center().x() as f32, map_state.center().y() as f32],
+            &[map_state.center.x as f32, map_state.center.y as f32],
         );
 
         let map_res_buffer = create_uniform_buffer_from_f32_slice(
             rendering_context,
             "Image map res buffer",
-            &[(map_state.zoom_res() * map_state.map_res_ratio()) as f32],
+            &[(map_state.zoom_res * map_state.map_res_ratio) as f32],
         );
 
         let params_bind_group_layout = create_image_params_bgl(rendering_context);

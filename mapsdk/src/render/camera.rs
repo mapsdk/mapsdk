@@ -16,7 +16,7 @@ fn calc_view_proj(
     view_proj.to_cols_array_2d()
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub(crate) struct Camera {
     eye: Vec3,
     target: Vec3,
@@ -55,46 +55,46 @@ impl Default for Camera {
 
 #[allow(dead_code)]
 impl Camera {
+    pub fn set_eye(&mut self, x: f32, y: f32, z: f32) {
+        self.eye = Vec3::new(x, y, z);
+        self.update_view_proj();
+    }
+
+    pub fn set_target(&mut self, x: f32, y: f32, z: f32) {
+        self.target = Vec3::new(x, y, z);
+        self.update_view_proj();
+    }
+
+    pub fn set_up(&mut self, x: f32, y: f32, z: f32) {
+        self.up = Vec3::new(x, y, z);
+        self.update_view_proj();
+    }
+
+    pub fn set_aspect(&mut self, aspect: f32) {
+        self.aspect = aspect;
+        self.update_view_proj();
+    }
+
+    pub fn set_fovy(&mut self, fovy: f32) {
+        self.fovy = fovy;
+        self.update_view_proj();
+    }
+
+    pub fn set_near(&mut self, near: f32) {
+        self.near = near;
+        self.update_view_proj();
+    }
+
+    pub fn set_far(&mut self, far: f32) {
+        self.far = far;
+        self.update_view_proj();
+    }
+
     pub fn view_proj(&self) -> [[f32; 4]; 4] {
         self.view_proj
     }
 
-    pub fn with_eye(mut self, x: f32, y: f32, z: f32) -> Self {
-        self.eye = Vec3::new(x, y, z);
-        self
-    }
-
-    pub fn with_target(mut self, x: f32, y: f32, z: f32) -> Self {
-        self.target = Vec3::new(x, y, z);
-        self
-    }
-
-    pub fn with_up(mut self, x: f32, y: f32, z: f32) -> Self {
-        self.up = Vec3::new(x, y, z);
-        self
-    }
-
-    pub fn with_aspect(mut self, aspect: f32) -> Self {
-        self.aspect = aspect;
-        self
-    }
-
-    pub fn with_fovy(mut self, fovy: f32) -> Self {
-        self.fovy = fovy;
-        self
-    }
-
-    pub fn with_near(mut self, near: f32) -> Self {
-        self.near = near;
-        self
-    }
-
-    pub fn with_far(mut self, far: f32) -> Self {
-        self.far = far;
-        self
-    }
-
-    pub fn update_view_proj(mut self) -> Self {
+    fn update_view_proj(&mut self) {
         self.view_proj = calc_view_proj(
             &self.eye,
             &self.target,
@@ -104,6 +104,5 @@ impl Camera {
             self.near,
             self.far,
         );
-        self
     }
 }

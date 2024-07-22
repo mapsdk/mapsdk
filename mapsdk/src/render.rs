@@ -93,10 +93,9 @@ impl Renderer {
                     }),
                 };
 
-                let camera = Camera::default()
-                    .with_eye(0.0, 0.0, height as f32 / 2.0)
-                    .with_aspect(width as f32 / height as f32)
-                    .update_view_proj();
+                let mut camera = Camera::default();
+                camera.set_eye(0.0, 0.0, height as f32 / 2.0);
+                camera.set_aspect(width as f32 / height as f32);
 
                 Self {
                     renderer_options: renderer_options.clone(),
@@ -118,10 +117,6 @@ impl Renderer {
 
     pub fn height(&self) -> u32 {
         self.rendering_size.height
-    }
-
-    pub fn set_draw_item(&mut self, id: &str, draw_item: DrawItem) {
-        self.draw_items.insert(id.to_string(), draw_item);
     }
 
     pub fn render(&mut self, map_state: &MapState) {
@@ -168,10 +163,8 @@ impl Renderer {
         self.rendering_size.width = width;
         self.rendering_size.height = height;
 
-        self.camera
-            .with_eye(0.0, 0.0, height as f32 / 2.0)
-            .with_aspect(width as f32 / height as f32)
-            .update_view_proj();
+        self.camera.set_eye(0.0, 0.0, height as f32 / 2.0);
+        self.camera.set_aspect(width as f32 / height as f32);
 
         let RenderingContext {
             surface,
@@ -183,6 +176,19 @@ impl Renderer {
         if let Some(config) = surface.get_default_config(&adapter, width, height) {
             surface.configure(&device, &config);
         }
+
+        self.render(&map_state);
+    }
+
+    pub fn set_draw_item(&mut self, id: &str, draw_item: DrawItem) {
+        self.draw_items.insert(id.to_string(), draw_item);
+    }
+
+    pub fn set_pitch(&mut self, pitch: f64, map_state: &MapState) {
+        let z = self.rendering_size.height as f32 / 2.0;
+        let y = z * pitch.to_radians().tan() as f32;
+
+        self.camera.set_eye(0.0, -y, z);
 
         self.render(&map_state);
     }
