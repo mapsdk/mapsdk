@@ -12,3 +12,4 @@ debug/
 target/
 **/*.rs.bk
 *.pdb
+rustc-ice-*.txt

@@ -1,11 +1,14 @@
 extern crate mapsdk;
 
 use mapsdk::{
-    common::Color,
-    geo::Coord,
-    layer::{ImageCoords, ImageLayer},
+    geo::{Bbox, Coord},
+    layer::{
+        image_layer::{ImageLayer, ImageLayerOptions},
+        image_tiled_layer::{ImageTiledLayer, ImageTiledLayerOptions},
+    },
     map::{Map, MapOptions},
     render::{Renderer, RendererOptions, RendererType},
+    utils::color::Color,
 };
 use winit::{
     application::ApplicationHandler,
@@ -28,9 +31,10 @@ struct Motion {
     drag_start_cursor_position: Option<Coord>,
     drag_start_map_center: Option<Coord>,
 
-    pitching: bool,
-    pitch_start_cursor_position: Option<Coord>,
+    rotating: bool,
+    rotate_start_cursor_position: Option<Coord>,
     pitch_start_value: f64,
+    yaw_start_value: f64,
 }
 
 impl ApplicationHandler for App {
@@ -40,28 +44,39 @@ impl ApplicationHandler for App {
                 .with_title("MapSDK - Hello Window")
                 .with_inner_size(LogicalSize::new(800.0, 500.0)),
         ) {
-            let background_color = self.map.options().background_color.clone();
             let renderer = pollster::block_on(Renderer::new(
                 RendererType::Window(window.into()),
-                &RendererOptions::default().with_background_color(background_color.into()),
+                &RendererOptions::default()
+                    .with_background_color(self.map.options().background_color.clone().into()),
             ));
             self.map.set_renderer(renderer);
 
             let headers = vec![("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"),("Accept", "image/webp,image/apng,image/*,*/*;q=0.8"),("Accept-Encoding", "gzip, deflate, br")];
 
-            let layer = ImageLayer::new(
+            let image_layer_options = ImageLayerOptions::default().with_headers(&headers);
+            let image_layer = ImageLayer::new(
                 "http://a.tile.osm.org/0/0/0.png",
-                headers,
-                ImageCoords {
-                    lt: Coord::new(-20037508.34278924, 20037508.34278924),
-                    lb: Coord::new(-20037508.34278924, -20037508.34278924),
-                    rt: Coord::new(20037508.34278924, 20037508.34278924),
-                    rb: Coord::new(20037508.34278924, -20037508.34278924),
-                },
+                Bbox::new(
+                    -20037508.34278924,
+                    -20037508.34278924,
+                    20037508.34278924,
+                    20037508.34278924,
+                )
+                .into(),
+                image_layer_options,
             );
-            let _ = self.map.add_layer(Box::new(layer));
+            // let _ = self.map.add_layer("image", Box::new(image_layer));
 
-            self.map.redraw();
+            let image_tiled_layer_options = ImageTiledLayerOptions::default()
+                .with_headers(&headers)
+                .with_url_subdomains(&vec!["a", "b", "c"]);
+            let image_tiled_layer = ImageTiledLayer::new(
+                "http://{s}.tile.osm.org/{z}/{x}/{y}.png",
+                image_tiled_layer_options,
+            );
+            let _ = self
+                .map
+                .add_layer("image tiled", Box::new(image_tiled_layer));
         }
     }
 
@@ -82,15 +97,15 @@ impl ApplicationHandler for App {
                         self.motion.dragging = true;
                         self.motion.drag_start_cursor_position = None;
                     } else if button == MouseButton::Right {
-                        self.motion.pitching = true;
-                        self.motion.pitch_start_cursor_position = None;
+                        self.motion.rotating = true;
+                        self.motion.rotate_start_cursor_position = None;
                     }
                 }
                 ElementState::Released => {
                     if button == MouseButton::Left {
                         self.motion.dragging = false;
                     } else if button == MouseButton::Right {
-                        self.motion.pitching = false;
+                        self.motion.rotating = false;
                     }
                 }
             },
@@ -114,28 +129,31 @@ impl ApplicationHandler for App {
                             self.motion.drag_start_map_center = self.map.center();
                         }
                     }
-                } else if self.motion.pitching {
-                    match self.motion.pitch_start_cursor_position {
-                        Some(pitch_start_cursor_position) => {
+                } else if self.motion.rotating {
+                    match self.motion.rotate_start_cursor_position {
+                        Some(rotate_start_cursor_position) => {
+                            let w = self.map.width().unwrap() as f64;
                             let h = self.map.height().unwrap() as f64;
-                            let dy = position.y - pitch_start_cursor_position.y;
-                            let factor = dy / h;
-                            self.map.set_pitch(
+                            let dx = position.x - rotate_start_cursor_position.x;
+                            let dy = position.y - rotate_start_cursor_position.y;
+                            self.map.set_pitch_yaw(
                                 self.motion.pitch_start_value
-                                    + factor * self.map.options().pitch_max,
+                                    + (dy / h) * self.map.options().pitch_max,
+                                self.motion.yaw_start_value - (dx / w) * 90.0,
                             )
                         }
                         None => {
-                            self.motion.pitch_start_cursor_position =
+                            self.motion.rotate_start_cursor_position =
                                 Some(Coord::new(position.x, position.y));
                             self.motion.pitch_start_value = self.map.pitch();
+                            self.motion.yaw_start_value = self.map.yaw();
                         }
                     }
                 }
             }
             WindowEvent::MouseWheel { delta, .. } => {
                 let coord = if let Some(cursor_position) = self.motion.cursor_position {
-                    self.map.screen_to_map(&cursor_position)
+                    self.map.to_map(&cursor_position)
                 } else {
                     self.map.center()
                 };

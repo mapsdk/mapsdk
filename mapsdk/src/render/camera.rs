@@ -17,7 +17,7 @@ fn calc_view_proj(
 }
 
 #[derive(Debug)]
-pub(crate) struct Camera {
+pub struct Camera {
     eye: Vec3,
     target: Vec3,
     up: Vec3,
@@ -55,18 +55,30 @@ impl Default for Camera {
 
 #[allow(dead_code)]
 impl Camera {
-    pub fn set_eye(&mut self, x: f32, y: f32, z: f32) {
-        self.eye = Vec3::new(x, y, z);
+    pub fn eye(&self) -> Vec3 {
+        self.eye
+    }
+
+    pub fn target(&self) -> Vec3 {
+        self.target
+    }
+
+    pub fn up(&self) -> Vec3 {
+        self.up
+    }
+
+    pub fn set_eye(&mut self, eye: Vec3) {
+        self.eye = eye;
         self.update_view_proj();
     }
 
-    pub fn set_target(&mut self, x: f32, y: f32, z: f32) {
-        self.target = Vec3::new(x, y, z);
+    pub fn set_target(&mut self, target: Vec3) {
+        self.target = target;
         self.update_view_proj();
     }
 
-    pub fn set_up(&mut self, x: f32, y: f32, z: f32) {
-        self.up = Vec3::new(x, y, z);
+    pub fn set_up(&mut self, up: Vec3) {
+        self.up = up;
         self.update_view_proj();
     }
 

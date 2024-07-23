@@ -1,10 +1,10 @@
-use dashmap::DashMap;
+use std::{collections::HashMap, time::Instant};
+
+use glam::{Quat, Vec3};
 use wgpu::*;
 
 use crate::{
-    common::PixelSize,
-    layer::ImageCoords,
-    map::MapState,
+    map::context::MapState,
     render::{
         camera::Camera,
         draw::DrawItem,
@@ -15,6 +15,7 @@ use crate::{
         },
         targets::Window,
     },
+    utils::size::PixelSize,
 };
 
 pub(crate) mod camera;
@@ -30,7 +31,7 @@ pub struct Renderer {
     rendering_resources: RenderingResources,
 
     camera: Camera,
-    draw_items: DashMap<String, DrawItem>,
+    draw_items: HashMap<String, DrawItem>,
 }
 
 impl Renderer {
@@ -94,7 +95,7 @@ impl Renderer {
                 };
 
                 let mut camera = Camera::default();
-                camera.set_eye(0.0, 0.0, height as f32 / 2.0);
+                camera.set_eye(Vec3::new(0.0, 0.0, height as f32 / 2.0));
                 camera.set_aspect(width as f32 / height as f32);
 
                 Self {
@@ -105,10 +106,22 @@ impl Renderer {
                     rendering_resources,
 
                     camera,
-                    draw_items: DashMap::new(),
+                    draw_items: HashMap::new(),
                 }
             }
         }
+    }
+
+    pub fn add_draw_item(&mut self, id: &str, draw_item: DrawItem) {
+        self.draw_items.insert(id.to_string(), draw_item);
+    }
+
+    pub fn camera(&self) -> &Camera {
+        &self.camera
+    }
+
+    pub fn contains_draw_item(&self, id: &str) -> bool {
+        self.draw_items.contains_key(id)
     }
 
     pub fn width(&self) -> u32 {
@@ -119,7 +132,13 @@ impl Renderer {
         self.rendering_size.height
     }
 
+    pub fn remove_draw_item(&mut self, id: &str) {
+        self.draw_items.remove(id);
+    }
+
     pub fn render(&mut self, map_state: &MapState) {
+        let instant = Instant::now();
+
         let RenderingContext {
             surface,
             device,
@@ -149,22 +168,24 @@ impl Renderer {
                     occlusion_query_set: None,
                 });
 
-                self.draw_items.iter_mut().for_each(|draw_item| {
-                    (*draw_item).draw(map_state, self, &mut render_pass);
-                });
+                for (_, draw_item) in &self.draw_items {
+                    draw_item.draw(map_state, self, &mut render_pass);
+                }
             }
 
             queue.submit(Some(command_encoder.finish()));
             surface_texture.present();
         }
+
+        log::info!("Renderer::render elapsed: {:?}", instant.elapsed());
     }
 
     pub fn resize(&mut self, width: u32, height: u32, map_state: &MapState) {
         self.rendering_size.width = width;
         self.rendering_size.height = height;
 
-        self.camera.set_eye(0.0, 0.0, height as f32 / 2.0);
-        self.camera.set_aspect(width as f32 / height as f32);
+        self.update_camera_size();
+        self.update_camera_position(map_state.pitch, map_state.yaw);
 
         let RenderingContext {
             surface,
@@ -180,17 +201,33 @@ impl Renderer {
         self.render(&map_state);
     }
 
-    pub fn set_draw_item(&mut self, id: &str, draw_item: DrawItem) {
-        self.draw_items.insert(id.to_string(), draw_item);
+    pub fn set_pitch_yaw(&mut self, pitch: f64, yaw: f64, map_state: &MapState) {
+        self.update_camera_position(pitch, yaw);
+        self.render(&map_state);
     }
 
-    pub fn set_pitch(&mut self, pitch: f64, map_state: &MapState) {
-        let z = self.rendering_size.height as f32 / 2.0;
-        let y = z * pitch.to_radians().tan() as f32;
+    fn update_camera_position(&mut self, pitch: f64, yaw: f64) {
+        let pitch_rad = pitch.to_radians() as f32;
+        let yaw_rad = yaw.to_radians() as f32;
 
-        self.camera.set_eye(0.0, -y, z);
+        let h = self.rendering_size.height as f32 / 2.0;
 
-        self.render(&map_state);
+        let v0 = Vec3::Z * h;
+        let v1 = Quat::from_axis_angle(Vec3::X, pitch_rad) * v0;
+        let v2 = Quat::from_axis_angle(Vec3::Z, yaw_rad) * v1;
+
+        let u0 = Vec3::Y;
+        let u1 = Quat::from_axis_angle(Vec3::Z, yaw_rad) * u0;
+
+        self.camera.set_eye(v2);
+        self.camera.set_up(u1);
+    }
+
+    fn update_camera_size(&mut self) {
+        let width = self.rendering_size.width as f32;
+        let height = self.rendering_size.height as f32;
+
+        self.camera.set_aspect(width / height);
     }
 }
 

@@ -1,17 +1,21 @@
 use image::DynamicImage;
 use wgpu::*;
 
-use crate::render::{
-    create_image_params_bgl, create_image_texture_bgl, create_texture_from_image,
-    draw::Drawable,
-    resources::{
-        buffer::{
-            create_index_buffer_from_u16_slice, create_uniform_buffer_from_f32_slice,
-            create_uniform_buffer_from_vec4_f32_slice, create_vertex_buffer_from_vec2_f32_slice,
+use crate::{
+    geo::QuadCoords,
+    render::{
+        create_image_params_bgl, create_image_texture_bgl, create_texture_from_image,
+        draw::Drawable,
+        resources::{
+            buffer::{
+                create_index_buffer_from_u16_slice, create_uniform_buffer_from_f32_slice,
+                create_uniform_buffer_from_vec4_f32_slice,
+                create_vertex_buffer_from_vec2_f32_slice,
+            },
+            layout::create_camera_bgl,
         },
-        layout::create_camera_bgl,
+        DrawItem, MapState, Renderer,
     },
-    DrawItem, ImageCoords, MapState, Renderer,
 };
 
 pub struct ImageDrawable {
@@ -22,7 +26,7 @@ pub struct ImageDrawable {
 }
 
 impl ImageDrawable {
-    pub fn new(renderer: &Renderer, image: &DynamicImage, coords: &ImageCoords) -> Self {
+    pub fn new(renderer: &Renderer, image: &DynamicImage, coords: &QuadCoords) -> Self {
         let rendering_context = &renderer.rendering_context;
 
         let texture = create_texture_from_image(rendering_context, image);

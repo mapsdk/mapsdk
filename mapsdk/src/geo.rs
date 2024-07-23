@@ -87,3 +87,23 @@ impl Sub for Coord {
         }
     }
 }
+
+/// Use LeftTop/LeftBottom/RightTop/RightBottom to describe quadrangular coordinates.
+#[derive(Clone, Copy, Debug)]
+pub struct QuadCoords {
+    pub lt: Coord,
+    pub lb: Coord,
+    pub rt: Coord,
+    pub rb: Coord,
+}
+
+impl From<Bbox> for QuadCoords {
+    fn from(bbox: Bbox) -> Self {
+        Self {
+            lt: Coord::new(bbox.xmin, bbox.ymax),
+            lb: Coord::new(bbox.xmin, bbox.ymin),
+            rt: Coord::new(bbox.xmax, bbox.ymax),
+            rb: Coord::new(bbox.xmax, bbox.ymin),
+        }
+    }
+}
