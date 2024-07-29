@@ -179,6 +179,21 @@ impl Tiling {
 
         None
     }
+
+    pub fn roll_up_tile_id(&self, tile_id: &TileId, level: u32) -> Option<TileId> {
+        if tile_id.z >= level as usize {
+            let child_z = tile_id.z - level as usize;
+            let factor = 2_i32.pow(level);
+
+            return Some(TileId {
+                z: child_z,
+                x: tile_id.x / factor,
+                y: tile_id.y / factor,
+            });
+        }
+
+        None
+    }
 }
 
 #[cfg(test)]

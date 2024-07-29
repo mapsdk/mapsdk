@@ -216,25 +216,43 @@ impl Layer for ImageTiledLayer {
                         dirty_tiles.insert(tile_id.clone());
                     }
                 }
-            }
-
-            for pair in self.tile_images.iter() {
-                let tile_id = pair.key();
 
                 if tile_id.z == map_state.zoom {
                     if !tile_ids.contains(tile_id) {
                         dirty_tiles.insert(tile_id.clone());
                     }
-                } else if tile_id.z + 1 == map_state.zoom {
-                    let child_tile_ids = map_options.tiling.drill_down_tile_ids(&tile_id, 1);
-                    for child_tile_id in child_tile_ids {
-                        if self.tile_images.contains_key(&child_tile_id) {
-                            dirty_tiles.insert(tile_id.clone());
-                            break;
-                        }
-                    }
                 } else {
                     dirty_tiles.insert(tile_id.clone());
+                }
+            }
+
+            // Keep resample tiles if possible
+            for tile_id in &tile_ids {
+                if !self.tile_images.contains_key(tile_id) {
+                    let mut roll_up_resampled = false;
+
+                    for level in 1..=5 {
+                        if let Some(parent_tile_id) =
+                            map_options.tiling.roll_up_tile_id(tile_id, level)
+                        {
+                            if self.tile_images.contains_key(&parent_tile_id) {
+                                dirty_tiles.remove(&parent_tile_id);
+                                roll_up_resampled = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if roll_up_resampled {
+                        continue;
+                    }
+
+                    let child_tile_ids = map_options.tiling.drill_down_tile_ids(tile_id, 1);
+                    if child_tile_ids.len() > 0 {
+                        for child_tile_id in child_tile_ids {
+                            dirty_tiles.remove(&child_tile_id);
+                        }
+                    }
                 }
             }
 
