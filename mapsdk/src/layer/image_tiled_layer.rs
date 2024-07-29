@@ -1,6 +1,7 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use dashmap::{DashMap, DashSet};
+use geo::{polygon, Intersects};
 use image::DynamicImage;
 use moka::sync::Cache;
 use tokio::{sync::mpsc, task::JoinHandle};
@@ -198,12 +199,44 @@ impl Layer for ImageTiledLayer {
 
         // Clear tiles that are no longer needed
         {
-            let dirty_tiles: Vec<_> = self
-                .tile_images
-                .iter()
-                .filter(|pair| pair.key().z != map_state.zoom)
-                .map(|pair| pair.key().clone())
-                .collect();
+            let mut dirty_tiles: HashSet<TileId> = HashSet::new();
+
+            for pair in self.tile_images.iter() {
+                let tile_id = pair.key();
+
+                if let Some(bbox) = map_options.tiling.get_tile_bbox(&tile_id) {
+                    let tile_polygon = polygon![
+                    (x: bbox.xmin, y: bbox.ymax),
+                    (x: bbox.xmin, y: bbox.ymin),
+                    (x: bbox.xmax, y: bbox.ymin),
+                    (x: bbox.xmax, y: bbox.ymax),
+                    ];
+
+                    if !tile_polygon.intersects(map_state.view_bounds()) {
+                        dirty_tiles.insert(tile_id.clone());
+                    }
+                }
+            }
+
+            for pair in self.tile_images.iter() {
+                let tile_id = pair.key();
+
+                if tile_id.z == map_state.zoom {
+                    if !tile_ids.contains(tile_id) {
+                        dirty_tiles.insert(tile_id.clone());
+                    }
+                } else if tile_id.z + 1 == map_state.zoom {
+                    let child_tile_ids = map_options.tiling.drill_down_tile_ids(&tile_id, 1);
+                    for child_tile_id in child_tile_ids {
+                        if self.tile_images.contains_key(&child_tile_id) {
+                            dirty_tiles.insert(tile_id.clone());
+                            break;
+                        }
+                    }
+                } else {
+                    dirty_tiles.insert(tile_id.clone());
+                }
+            }
 
             for tile_id in dirty_tiles {
                 self.tile_images.remove(&tile_id);
@@ -211,21 +244,17 @@ impl Layer for ImageTiledLayer {
                 let draw_item_id = self.format_draw_item_id(&tile_id);
                 renderer.remove_draw_item(&draw_item_id);
             }
+        }
 
-            for pair in self.tile_images.iter() {
-                let tile_id = pair.key();
-                let image = pair.value();
+        for pair in self.tile_images.iter() {
+            let tile_id = pair.key();
+            let image = pair.value();
 
-                if tile_id.z != map_state.zoom {
-                    continue;
-                }
-
-                if let Some(bbox) = map_options.tiling.get_tile_bbox(&tile_id) {
-                    let draw_item_id = self.format_draw_item_id(&tile_id);
-                    if !renderer.contains_draw_item(&draw_item_id) {
-                        let drawable = ImageDrawable::new(renderer, &image, &bbox.into());
-                        renderer.add_draw_item(&draw_item_id, drawable.into());
-                    }
+            if let Some(bbox) = map_options.tiling.get_tile_bbox(&tile_id) {
+                let draw_item_id = self.format_draw_item_id(&tile_id);
+                if !renderer.contains_draw_item(&draw_item_id) {
+                    let drawable = ImageDrawable::new(renderer, &image, &bbox.into());
+                    renderer.add_draw_item(&draw_item_id, drawable.into());
                 }
             }
         }

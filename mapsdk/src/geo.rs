@@ -1,5 +1,7 @@
 use std::ops::{Add, Div, Mul, Sub};
 
+use geo::{polygon, Polygon};
+
 const COORD_PRECISION: f64 = 1e-8;
 
 #[derive(Clone, Copy, Debug)]
@@ -18,6 +20,17 @@ impl Bbox {
             xmax,
             ymax,
         }
+    }
+}
+
+impl Into<Polygon> for Bbox {
+    fn into(self) -> Polygon {
+        polygon![
+            (x: self.xmin, y: self.ymax),
+            (x: self.xmin, y: self.ymin),
+            (x: self.xmax, y: self.ymin),
+            (x: self.xmax, y: self.ymax),
+        ]
     }
 }
 

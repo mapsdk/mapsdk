@@ -1,4 +1,7 @@
+use geo::{polygon, BoundingRect, Intersects};
+
 use crate::{
+    geo::Coord,
     map::context::MapState,
     tiling::{TileId, Tiling},
 };
@@ -7,24 +10,37 @@ pub fn tile_ids_in_view(map_state: &MapState, tiling: &Tiling) -> Vec<TileId> {
     let mut tile_ids = Vec::new();
 
     let z = map_state.zoom;
-    let view_bounds = map_state.view_bounds();
-    if let (Some(lt), Some(lb), Some(rt), Some(rb)) = (
-        tiling.get_tile_id(z, &view_bounds.lt),
-        tiling.get_tile_id(z, &view_bounds.lb),
-        tiling.get_tile_id(z, &view_bounds.rt),
-        tiling.get_tile_id(z, &view_bounds.rb),
-    ) {
-        let max_x_y = tiling.get_max_x_y(z);
 
-        let min_x = lt.x.min(lb.x).max(0);
-        let max_x = rt.x.max(rb.x).min(max_x_y);
-        let min_y = lt.y.min(lb.y).max(0);
-        let max_y = rt.y.max(rb.y).min(max_x_y);
+    if let Some(view_rect) = map_state.view_bounds().bounding_rect() {
+        if let (Some(lt), Some(lb), Some(rt), Some(rb)) = (
+            tiling.get_tile_id(z, &Coord::new(view_rect.min().x, view_rect.max().y)),
+            tiling.get_tile_id(z, &Coord::new(view_rect.min().x, view_rect.min().y)),
+            tiling.get_tile_id(z, &Coord::new(view_rect.max().x, view_rect.max().y)),
+            tiling.get_tile_id(z, &Coord::new(view_rect.max().x, view_rect.min().y)),
+        ) {
+            let max_x_y = tiling.get_max_x_y(z);
 
-        for x in min_x..=max_x {
-            for y in min_y..=max_y {
-                // TODO reduce tile ids
-                tile_ids.push(TileId { z, x, y });
+            let min_x = lt.x.min(lb.x).min(rt.x).min(rb.x).max(0);
+            let max_x = lt.x.max(lb.x).max(rt.x).max(rb.x).min(max_x_y);
+            let min_y = lt.y.min(lb.y).min(rt.y).min(rb.y).max(0);
+            let max_y = lt.y.max(lb.y).max(rt.y).max(rb.y).min(max_x_y);
+
+            for x in min_x..=max_x {
+                for y in min_y..=max_y {
+                    let tile_id = TileId { z, x, y };
+                    if let Some(bbox) = tiling.get_tile_bbox(&tile_id) {
+                        let tile_polygon = polygon![
+                        (x: bbox.xmin, y: bbox.ymax),
+                        (x: bbox.xmin, y: bbox.ymin),
+                        (x: bbox.xmax, y: bbox.ymin),
+                        (x: bbox.xmax, y: bbox.ymax),
+                        ];
+
+                        if tile_polygon.intersects(map_state.view_bounds()) {
+                            tile_ids.push(tile_id);
+                        }
+                    }
+                }
             }
         }
     }

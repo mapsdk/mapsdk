@@ -38,6 +38,27 @@ impl Default for Tiling {
 }
 
 impl Tiling {
+    pub fn drill_down_tile_ids(&self, tile_id: &TileId, level: u32) -> Vec<TileId> {
+        let mut tile_ids: Vec<TileId> = Vec::new();
+
+        if tile_id.z < self.zoom_resolutions.len() - 1 {
+            let child_z = tile_id.z + level as usize;
+            let factor = 2_i32.pow(level);
+
+            for i in 0..factor {
+                for j in 0..factor {
+                    tile_ids.push(TileId {
+                        z: child_z,
+                        x: tile_id.x * factor + i,
+                        y: tile_id.y * factor + j,
+                    });
+                }
+            }
+        }
+
+        tile_ids
+    }
+
     pub fn get_closest_lower_zoom(&self, resolution: f64) -> usize {
         let resolutions = &self.zoom_resolutions;
         if resolutions.len() > 0 {

@@ -181,7 +181,11 @@ pub fn main() {
     event_loop.set_control_flow(ControlFlow::Wait);
 
     let mut app = App {
-        map: Map::new(&MapOptions::default().with_background_color(Color::from_rgb(180, 180, 180))),
+        map: Map::new(
+            &MapOptions::default()
+                .with_zoom_max(19)
+                .with_background_color(Color::from_rgb(180, 180, 180)),
+        ),
         motion: Motion::default(),
     };
     let _ = event_loop.run_app(&mut app);
