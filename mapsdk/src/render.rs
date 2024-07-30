@@ -11,7 +11,7 @@ use crate::{
         resources::{
             layout::{create_image_params_bgl, create_image_texture_bgl},
             pipeline::create_image_pipeline,
-            texture::create_texture_from_image,
+            texture::{create_depth_texture, create_texture_from_image},
         },
         targets::Window,
     },
@@ -81,9 +81,12 @@ impl Renderer {
                     queue,
                 };
 
+                let depth_texture = create_depth_texture(&rendering_context, width, height);
+                let depth_texture_view =
+                    depth_texture.create_view(&TextureViewDescriptor::default());
+
                 let rendering_resources = RenderingResources {
-                    image_pipeline: create_image_pipeline(&rendering_context),
-                    image_sampler: rendering_context.device.create_sampler(&SamplerDescriptor {
+                    color_sampler: rendering_context.device.create_sampler(&SamplerDescriptor {
                         address_mode_u: AddressMode::ClampToEdge,
                         address_mode_v: AddressMode::ClampToEdge,
                         address_mode_w: AddressMode::ClampToEdge,
@@ -92,6 +95,8 @@ impl Renderer {
                         mipmap_filter: FilterMode::Nearest,
                         ..Default::default()
                     }),
+                    depth_texture_view,
+                    image_pipeline: create_image_pipeline(&rendering_context),
                 };
 
                 let mut camera = Camera::default();
@@ -154,7 +159,7 @@ impl Renderer {
                 device.create_command_encoder(&CommandEncoderDescriptor { label: None });
             {
                 let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
-                    label: None,
+                    label: Some("Render Pass"),
                     color_attachments: &[Some(RenderPassColorAttachment {
                         view: &surface_view,
                         resolve_target: None,
@@ -163,6 +168,14 @@ impl Renderer {
                             store: StoreOp::Store,
                         },
                     })],
+                    // depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                    //     view: &self.rendering_resources.depth_texture_view,
+                    //     depth_ops: Some(Operations {
+                    //         load: LoadOp::Clear(1.0),
+                    //         store: StoreOp::Store,
+                    //     }),
+                    //     stencil_ops: None,
+                    // }),
                     depth_stencil_attachment: None,
                     timestamp_writes: None,
                     occlusion_query_set: None,
@@ -197,6 +210,10 @@ impl Renderer {
         if let Some(config) = surface.get_default_config(&adapter, width, height) {
             surface.configure(&device, &config);
         }
+
+        let depth_texture = create_depth_texture(&self.rendering_context, width, height);
+        self.rendering_resources.depth_texture_view =
+            depth_texture.create_view(&TextureViewDescriptor::default());
 
         self.render(&map_state);
     }
@@ -261,8 +278,9 @@ pub enum RendererType {
 }
 
 pub(crate) struct RenderingResources {
+    color_sampler: Sampler,
+    depth_texture_view: TextureView,
     image_pipeline: RenderPipeline,
-    image_sampler: Sampler,
 }
 
 pub(crate) struct RenderingContext {

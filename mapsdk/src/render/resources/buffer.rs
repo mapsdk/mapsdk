@@ -47,10 +47,10 @@ pub(crate) fn create_uniform_buffer_from_vec4_f32_slice(
         })
 }
 
-pub(crate) fn create_vertex_buffer_from_vec2_f32_slice(
+pub(crate) fn create_vertex_buffer_from_vec3_f32_slice(
     rendering_context: &RenderingContext,
     label: &str,
-    slice: &[[f32; 2]],
+    slice: &[[f32; 3]],
 ) -> Buffer {
     rendering_context
         .device

@@ -8,7 +8,7 @@ use crate::render::{
     resources::{
         buffer::{
             create_index_buffer_from_u16_slice, create_uniform_buffer_from_f32_slice,
-            create_uniform_buffer_from_vec4_f32_slice, create_vertex_buffer_from_vec2_f32_slice,
+            create_uniform_buffer_from_vec4_f32_slice, create_vertex_buffer_from_vec3_f32_slice,
         },
         layout::create_camera_bgl,
     },
@@ -16,14 +16,13 @@ use crate::render::{
 };
 
 pub struct ImageDrawable {
-    texture: Texture,
-
+    texture_view: TextureView,
     vertex_buffer: Buffer,
     vertex_index_buffer: Buffer,
 }
 
 impl ImageDrawable {
-    pub fn new(renderer: &Renderer, image: &DynamicImage, rect: &Rect) -> Self {
+    pub fn new(renderer: &Renderer, image: &DynamicImage, rect: &Rect, z: f64) -> Self {
         let rendering_context = &renderer.rendering_context;
 
         let texture = create_texture_from_image(rendering_context, image);
@@ -42,15 +41,16 @@ impl ImageDrawable {
             },
             texture.size(),
         );
+        let texture_view = texture.create_view(&TextureViewDescriptor::default());
 
         let vertices = [
-            [rect.min().x as f32, rect.max().y as f32],
-            [rect.min().x as f32, rect.min().y as f32],
-            [rect.max().x as f32, rect.max().y as f32],
-            [rect.max().x as f32, rect.min().y as f32],
+            [rect.min().x as f32, rect.max().y as f32, z as f32],
+            [rect.min().x as f32, rect.min().y as f32, z as f32],
+            [rect.max().x as f32, rect.max().y as f32, z as f32],
+            [rect.max().x as f32, rect.min().y as f32, z as f32],
         ];
 
-        let vertex_buffer = create_vertex_buffer_from_vec2_f32_slice(
+        let vertex_buffer = create_vertex_buffer_from_vec3_f32_slice(
             rendering_context,
             "Image vertex buffer",
             &vertices,
@@ -64,8 +64,7 @@ impl ImageDrawable {
         );
 
         Self {
-            texture,
-
+            texture_view,
             vertex_buffer,
             vertex_index_buffer,
         }
@@ -86,7 +85,7 @@ impl Drawable for ImageDrawable {
         let camera_bind_group = rendering_context
             .device
             .create_bind_group(&BindGroupDescriptor {
-                label: Some("Camera bind group"),
+                label: Some("Camera BindGroup"),
                 layout: &camera_bind_group_layout,
                 entries: &[BindGroupEntry {
                     binding: 0,
@@ -94,35 +93,33 @@ impl Drawable for ImageDrawable {
                 }],
             });
 
-        let texture = &self.texture;
-        let texture_view = texture.create_view(&TextureViewDescriptor::default());
         let texture_bind_group_layout = create_image_texture_bgl(rendering_context);
         let texture_bind_group = rendering_context
             .device
             .create_bind_group(&BindGroupDescriptor {
-                label: Some("Image texture buffer"),
+                label: Some("Image Texture BindGroup"),
                 layout: &texture_bind_group_layout,
                 entries: &[
                     BindGroupEntry {
                         binding: 0,
-                        resource: BindingResource::TextureView(&texture_view),
+                        resource: BindingResource::TextureView(&self.texture_view),
                     },
                     BindGroupEntry {
                         binding: 1,
-                        resource: BindingResource::Sampler(&rendering_resources.image_sampler),
+                        resource: BindingResource::Sampler(&rendering_resources.color_sampler),
                     },
                 ],
             });
 
         let map_center_buffer = create_uniform_buffer_from_f32_slice(
             rendering_context,
-            "Image map center buffer",
+            "Image MapCenter Buffer",
             &[map_state.center.x as f32, map_state.center.y as f32],
         );
 
         let map_res_buffer = create_uniform_buffer_from_f32_slice(
             rendering_context,
-            "Image map res buffer",
+            "Image MapRes Buffer",
             &[(map_state.zoom_res * map_state.map_res_ratio) as f32],
         );
 
@@ -130,7 +127,7 @@ impl Drawable for ImageDrawable {
         let params_bind_group = rendering_context
             .device
             .create_bind_group(&BindGroupDescriptor {
-                label: Some("Image params bind group"),
+                label: Some("Image Params BindGroup"),
                 layout: &params_bind_group_layout,
                 entries: &[
                     BindGroupEntry {

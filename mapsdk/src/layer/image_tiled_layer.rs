@@ -264,7 +264,7 @@ impl Layer for ImageTiledLayer {
             if let Some(bbox) = map_options.tiling.get_tile_bbox(&tile_id) {
                 let draw_item_id = self.format_draw_item_id(&tile_id);
                 if !renderer.contains_draw_item(&draw_item_id) {
-                    let drawable = ImageDrawable::new(renderer, &image, &bbox.into());
+                    let drawable = ImageDrawable::new(renderer, &image, &bbox, self.options.z);
                     renderer.add_draw_item(&draw_item_id, drawable.into());
                 }
             }
@@ -277,6 +277,7 @@ pub struct ImageTiledLayerOptions {
     concurrent: usize,
     headers: Vec<(String, String)>,
     url_subdomains: Option<Vec<String>>,
+    z: f64,
 }
 
 impl ImageTiledLayerOptions {
@@ -302,6 +303,11 @@ impl ImageTiledLayerOptions {
         self.url_subdomains = Some(v.iter().map(|s| s.to_string()).collect());
         self
     }
+
+    pub fn with_z(mut self, v: f64) -> Self {
+        self.z = v;
+        self
+    }
 }
 
 impl Default for ImageTiledLayerOptions {
@@ -311,6 +317,7 @@ impl Default for ImageTiledLayerOptions {
             concurrent: 8,
             headers: Vec::new(),
             url_subdomains: None,
+            z: 0.0,
         }
     }
 }

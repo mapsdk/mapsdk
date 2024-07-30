@@ -109,7 +109,7 @@ impl Layer for ImageLayer {
         if self.image_updated.load(Ordering::SeqCst) {
             if let Ok(image) = self.image.read() {
                 if let Some(image) = image.as_ref() {
-                    let drawable = ImageDrawable::new(renderer, &image, &self.rect);
+                    let drawable = ImageDrawable::new(renderer, &image, &self.rect, self.options.z);
                     renderer.add_draw_item(&self.image_id, drawable.into());
                 }
             }
@@ -121,6 +121,7 @@ impl Layer for ImageLayer {
 
 pub struct ImageLayerOptions {
     headers: Vec<(String, String)>,
+    z: f64,
 }
 
 impl ImageLayerOptions {
@@ -131,12 +132,18 @@ impl ImageLayerOptions {
             .collect();
         self
     }
+
+    pub fn with_z(mut self, v: f64) -> Self {
+        self.z = v;
+        self
+    }
 }
 
 impl Default for ImageLayerOptions {
     fn default() -> Self {
         Self {
             headers: Vec::new(),
+            z: 0.0,
         }
     }
 }

@@ -15,29 +15,43 @@ impl ToString for TileId {
 
 #[derive(Clone, Debug)]
 pub struct Tiling {
-    pub tile_size: u32,
-    pub origin_x: f64,
-    pub origin_y: f64,
-    pub zoom_resolutions: Vec<f64>,
+    tile_size: u32,
+    map_size: f64,
+    origin_x: f64,
+    origin_y: f64,
+
+    zoom_resolutions: Vec<f64>,
 }
 
 impl Default for Tiling {
     /// Use Google's tiling scheme as default
     fn default() -> Self {
-        const TILE_SIZE: u32 = 256;
-        const MAP_MAX: f64 = 20037508.34278924;
-        const BASE_RES: f64 = MAP_MAX / TILE_SIZE as f64;
-
-        Self {
-            tile_size: TILE_SIZE,
-            origin_x: -MAP_MAX,
-            origin_y: MAP_MAX,
-            zoom_resolutions: (0..24).map(|i| BASE_RES / (2.0_f64).powi(i - 1)).collect(),
-        }
+        Self::new(
+            256,
+            40075016.68557848,
+            -20037508.342789244,
+            20037508.342789244,
+            24,
+        )
     }
 }
 
 impl Tiling {
+    pub fn new(tile_size: u32, map_size: f64, origin_x: f64, origin_y: f64, zooms: u32) -> Self {
+        assert!(tile_size > 0 && zooms > 0 && map_size > 0.0);
+
+        Self {
+            tile_size,
+            map_size,
+            origin_x,
+            origin_y,
+
+            zoom_resolutions: (0..zooms)
+                .map(|i| map_size / tile_size as f64 / (2.0_f64).powf(i as f64))
+                .collect(),
+        }
+    }
+
     pub fn drill_down_tile_ids(&self, tile_id: &TileId, level: u32) -> Vec<TileId> {
         let mut tile_ids: Vec<TileId> = Vec::new();
 
@@ -183,6 +197,18 @@ impl Tiling {
         None
     }
 
+    pub fn map_size(&self) -> f64 {
+        self.map_size
+    }
+
+    pub fn origin_x(&self) -> f64 {
+        self.origin_x
+    }
+
+    pub fn origin_y(&self) -> f64 {
+        self.origin_y
+    }
+
     pub fn roll_up_tile_id(&self, tile_id: &TileId, level: u32) -> Option<TileId> {
         if tile_id.z >= level as usize {
             let child_z = tile_id.z - level as usize;
@@ -196,6 +222,10 @@ impl Tiling {
         }
 
         None
+    }
+
+    pub fn tile_size(&self) -> u32 {
+        self.tile_size
     }
 }
 

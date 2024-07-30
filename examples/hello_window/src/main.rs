@@ -53,7 +53,9 @@ impl ApplicationHandler for App {
 
             let headers = vec![("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"),("Accept", "image/webp,image/apng,image/*,*/*;q=0.8"),("Accept-Encoding", "gzip, deflate, br")];
 
-            let image_layer_options = ImageLayerOptions::default().with_headers(&headers);
+            let image_layer_options = ImageLayerOptions::default()
+                .with_headers(&headers)
+                .with_z(-100.0);
             let image_layer = ImageLayer::new(
                 "http://a.tile.osm.org/0/0/0.png",
                 Rect::new(

@@ -6,7 +6,7 @@ pub(crate) fn create_camera_bgl(rendering_context: &RenderingContext) -> BindGro
     rendering_context
         .device
         .create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: Some("Camera bind group layout"),
+            label: Some("Camera BindGroupLayout"),
             entries: &[BindGroupLayoutEntry {
                 binding: 0,
                 visibility: ShaderStages::VERTEX,
@@ -24,7 +24,7 @@ pub(crate) fn create_image_texture_bgl(rendering_context: &RenderingContext) -> 
     rendering_context
         .device
         .create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: Some("Image texture bind group layout"),
+            label: Some("Image Texture BindGroupLayout"),
             entries: &[
                 BindGroupLayoutEntry {
                     binding: 0,
@@ -50,7 +50,7 @@ pub(crate) fn create_image_params_bgl(rendering_context: &RenderingContext) -> B
     rendering_context
         .device
         .create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: Some("Image params bind group layout"),
+            label: Some("Image Params BindGroupLayout"),
             entries: &[
                 BindGroupLayoutEntry {
                     binding: 0,

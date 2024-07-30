@@ -69,7 +69,7 @@ impl MapContext {
 
     pub fn resize(&mut self, width: u32, height: u32) {
         self.state.map_res_ratio =
-            self.map_options.tiling.tile_size as f64 / width.min(height) as f64;
+            self.map_options.tiling.tile_size() as f64 / width.min(height) as f64;
 
         if let Some(renderer) = &mut self.renderer {
             renderer.resize(width, height, &self.state);
