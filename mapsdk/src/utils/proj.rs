@@ -1,6 +1,6 @@
 use std::f64::consts::PI;
 
-use crate::geo::Coord;
+use geo::Coord;
 
 const WEB_MERCATOR_EARTH_RADIUS: f64 = 6378137.0;
 
@@ -14,7 +14,7 @@ pub fn lonlat_to_wm(coord: &Coord) -> Option<Coord> {
         let y = WEB_MERCATOR_EARTH_RADIUS / 2.0 * ((1.0 + siny) / (1.0 - siny)).ln();
 
         if x.is_finite() && y.is_finite() {
-            return Some(Coord::new(x, y));
+            return Some(Coord { x, y });
         }
     }
 
@@ -35,7 +35,7 @@ pub fn wm_to_lonlat(coord: &Coord) -> Option<Coord> {
         let y = (PI / 2.0 - (-coord.y / WEB_MERCATOR_EARTH_RADIUS).exp().atan() * 2.0).to_degrees();
 
         if x.is_finite() && y.is_finite() {
-            return Some(Coord::new(x, y));
+            return Some(Coord { x, y });
         }
     }
 
@@ -44,41 +44,79 @@ pub fn wm_to_lonlat(coord: &Coord) -> Option<Coord> {
 
 #[cfg(test)]
 mod tests {
+    use geo::EuclideanDistance;
+
     use super::*;
+
+    const COORD_PRECISION: f64 = 1e-8;
 
     #[test]
     fn test_lonlat_to_wm() {
-        assert_eq!(
-            lonlat_to_wm(&Coord::new(0.0, 0.0)).unwrap(),
-            Coord::new(0.0, 0.0)
+        assert!(
+            lonlat_to_wm(&Coord { x: 0.0, y: 0.0 })
+                .unwrap()
+                .euclidean_distance(&Coord { x: 0.0, y: 0.0 })
+                < COORD_PRECISION,
         );
-        assert_eq!(
-            lonlat_to_wm(&Coord::new(180.0, 0.0)).unwrap(),
-            Coord::new(20037508.34278924, 0.0)
+        assert!(
+            lonlat_to_wm(&Coord { x: 180.0, y: 0.0 })
+                .unwrap()
+                .euclidean_distance(&Coord {
+                    x: 20037508.34278924,
+                    y: 0.0
+                })
+                < COORD_PRECISION,
         );
-        assert_eq!(
-            lonlat_to_wm(&Coord::new(180.0, 60.0)).unwrap(),
-            Coord::new(20037508.34278924, 8399737.88981836)
+        assert!(
+            lonlat_to_wm(&Coord { x: 180.0, y: 60.0 })
+                .unwrap()
+                .euclidean_distance(&Coord {
+                    x: 20037508.34278924,
+                    y: 8399737.88981836
+                })
+                < COORD_PRECISION
         );
-        assert!(lonlat_to_wm(&Coord::new(180.0, 90.0)).is_none());
-        assert!(lonlat_to_wm(&Coord::new(-270.0, 0.0)).is_none());
+        assert!(lonlat_to_wm(&Coord { x: 180.0, y: 90.0 }).is_none());
+        assert!(lonlat_to_wm(&Coord { x: -270.0, y: 0.0 }).is_none());
     }
 
     #[test]
     fn test_wm_to_lonlat() {
-        assert_eq!(
-            wm_to_lonlat(&Coord::new(0.0, 0.0)).unwrap(),
-            Coord::new(0.0, 0.0)
+        assert!(
+            wm_to_lonlat(&Coord { x: 0.0, y: 0.0 })
+                .unwrap()
+                .euclidean_distance(&Coord { x: 0.0, y: 0.0 })
+                < COORD_PRECISION
         );
-        assert_eq!(
-            wm_to_lonlat(&Coord::new(20037508.34278924, 0.0)).unwrap(),
-            Coord::new(180.0, 0.0)
+        assert!(
+            wm_to_lonlat(&Coord {
+                x: 20037508.34278924,
+                y: 0.0
+            })
+            .unwrap()
+            .euclidean_distance(&Coord { x: 180.0, y: 0.0 })
+                < COORD_PRECISION
         );
-        assert_eq!(
-            wm_to_lonlat(&Coord::new(20037508.34278924, 20037508.34278924)).unwrap(),
-            Coord::new(180.0, 85.05112877980659)
+        assert!(
+            wm_to_lonlat(&Coord {
+                x: 20037508.34278924,
+                y: 20037508.34278924
+            })
+            .unwrap()
+            .euclidean_distance(&Coord {
+                x: 180.0,
+                y: 85.05112877980659
+            }) < COORD_PRECISION
         );
-        assert!(wm_to_lonlat(&Coord::new(20037509.0, 20037508.34278924)).is_none());
-        assert!(wm_to_lonlat(&Coord::new(-20037508.34278924, -20037509.0)).is_none());
+        assert!(wm_to_lonlat(&Coord {
+            x: 20037509.0,
+            y: 20037508.34278924
+        })
+        .is_none());
+        assert!(wm_to_lonlat(&Coord {
+            x: -20037508.34278924,
+            y: -20037509.0
+        })
+        .is_none());
     }
 }

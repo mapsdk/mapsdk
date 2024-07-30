@@ -1,7 +1,7 @@
 extern crate mapsdk;
 
+use geo::{Coord, Rect};
 use mapsdk::{
-    geo::{Bbox, Coord},
     layer::{
         image_layer::{ImageLayer, ImageLayerOptions},
         image_tiled_layer::{ImageTiledLayer, ImageTiledLayerOptions},
@@ -56,13 +56,16 @@ impl ApplicationHandler for App {
             let image_layer_options = ImageLayerOptions::default().with_headers(&headers);
             let image_layer = ImageLayer::new(
                 "http://a.tile.osm.org/0/0/0.png",
-                Bbox::new(
-                    -20037508.34278924,
-                    -20037508.34278924,
-                    20037508.34278924,
-                    20037508.34278924,
-                )
-                .into(),
+                Rect::new(
+                    Coord {
+                        x: -20037508.34278924,
+                        y: -20037508.34278924,
+                    },
+                    Coord {
+                        x: 20037508.34278924,
+                        y: 20037508.34278924,
+                    },
+                ),
                 image_layer_options,
             );
             // let _ = self.map.add_layer("image", Box::new(image_layer));
@@ -110,7 +113,10 @@ impl ApplicationHandler for App {
                 }
             },
             WindowEvent::CursorMoved { position, .. } => {
-                self.motion.cursor_position = Some(Coord::new(position.x, position.y));
+                self.motion.cursor_position = Some(Coord {
+                    x: position.x,
+                    y: position.y,
+                });
 
                 if self.motion.dragging {
                     match self.motion.drag_start_cursor_position {
@@ -119,13 +125,15 @@ impl ApplicationHandler for App {
                                 let map_res = self.map.resolution().unwrap();
                                 let dx = (position.x - drag_start_cursor_position.x) * map_res;
                                 let dy = (drag_start_cursor_position.y - position.y) * map_res;
-                                let new_center = drag_start_map_center - Coord::new(dx, dy);
+                                let new_center = drag_start_map_center - Coord { x: dx, y: dy };
                                 self.map.set_center(new_center);
                             }
                         }
                         None => {
-                            self.motion.drag_start_cursor_position =
-                                Some(Coord::new(position.x, position.y));
+                            self.motion.drag_start_cursor_position = Some(Coord {
+                                x: position.x,
+                                y: position.y,
+                            });
                             self.motion.drag_start_map_center = self.map.center();
                         }
                     }
@@ -143,8 +151,10 @@ impl ApplicationHandler for App {
                             )
                         }
                         None => {
-                            self.motion.rotate_start_cursor_position =
-                                Some(Coord::new(position.x, position.y));
+                            self.motion.rotate_start_cursor_position = Some(Coord {
+                                x: position.x,
+                                y: position.y,
+                            });
                             self.motion.pitch_start_value = self.map.pitch();
                             self.motion.yaw_start_value = self.map.yaw();
                         }

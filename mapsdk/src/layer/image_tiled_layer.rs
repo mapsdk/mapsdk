@@ -1,7 +1,7 @@
 use std::{collections::HashSet, sync::Arc};
 
 use dashmap::{DashMap, DashSet};
-use geo::{polygon, Intersects};
+use geo::Intersects;
 use image::DynamicImage;
 use moka::sync::Cache;
 use tokio::{sync::mpsc, task::JoinHandle};
@@ -205,14 +205,7 @@ impl Layer for ImageTiledLayer {
                 let tile_id = pair.key();
 
                 if let Some(bbox) = map_options.tiling.get_tile_bbox(&tile_id) {
-                    let tile_polygon = polygon![
-                    (x: bbox.xmin, y: bbox.ymax),
-                    (x: bbox.xmin, y: bbox.ymin),
-                    (x: bbox.xmax, y: bbox.ymin),
-                    (x: bbox.xmax, y: bbox.ymax),
-                    ];
-
-                    if !tile_polygon.intersects(map_state.view_bounds()) {
+                    if !bbox.to_polygon().intersects(map_state.view_bounds()) {
                         dirty_tiles.insert(tile_id.clone());
                     }
                 }
@@ -315,7 +308,7 @@ impl Default for ImageTiledLayerOptions {
     fn default() -> Self {
         Self {
             cache_size: 512,
-            concurrent: 4,
+            concurrent: 8,
             headers: Vec::new(),
             url_subdomains: None,
         }

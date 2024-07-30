@@ -1,14 +1,9 @@
 use std::{collections::BTreeMap, time::Instant};
 
-use geo::{polygon, Polygon};
+use geo::{polygon, Coord, Polygon, Rect};
 use glam::{DQuat, DVec3};
 
-use crate::{
-    geo::{Bbox, Coord},
-    layer::Layer,
-    map::MapOptions,
-    render::Renderer,
-};
+use crate::{layer::Layer, map::MapOptions, render::Renderer};
 
 pub struct MapContext {
     pub map_options: MapOptions,
@@ -125,7 +120,11 @@ impl MapContext {
         let map_center = self.state.center;
         let map_res = self.state.zoom_res * self.state.map_res_ratio;
 
-        let map_coord = map_center + Coord::new(p.x.into(), p.y.into()) * map_res;
+        let map_coord = map_center
+            + Coord {
+                x: p.x.into(),
+                y: p.y.into(),
+            } * map_res;
 
         Some(map_coord)
     }
@@ -161,7 +160,10 @@ impl MapContext {
         let screen_center_x = self.renderer.as_ref()?.width() as f64 / 2.0;
         let screen_center_y = self.renderer.as_ref()?.height() as f64 / 2.0;
 
-        let screen_coord = Coord::new(screen_center_x + v2.x as f64, screen_center_y - v2.y as f64);
+        let screen_coord = Coord {
+            x: screen_center_x + v2.x as f64,
+            y: screen_center_y - v2.y as f64,
+        };
 
         Some(screen_coord)
     }
@@ -248,14 +250,15 @@ pub struct MapState {
 impl Default for MapState {
     fn default() -> Self {
         Self {
-            center: Coord::new(0.0, 0.0),
+            center: Coord { x: 0.0, y: 0.0 },
             map_res_ratio: 1.0,
             pitch: 0.0,
             yaw: 0.0,
             zoom: 0,
             zoom_res: 1.0,
 
-            view_bounds: Bbox::new(-1.0, -1.0, 1.0, 1.0).into(),
+            view_bounds: Rect::new(Coord { x: -1.0, y: -1.0 }, Coord { x: 1.0, y: 1.0 })
+                .to_polygon(),
             view_bounds_seq: 0,
             view_seq: 1,
         }

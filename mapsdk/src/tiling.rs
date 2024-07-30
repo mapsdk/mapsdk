@@ -1,4 +1,4 @@
-use crate::geo::{Bbox, Coord};
+use geo::{Coord, Rect};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct TileId {
@@ -150,7 +150,7 @@ impl Tiling {
         }
     }
 
-    pub fn get_tile_bbox(&self, tile_id: &TileId) -> Option<Bbox> {
+    pub fn get_tile_bbox(&self, tile_id: &TileId) -> Option<Rect> {
         if tile_id.z < self.zoom_resolutions.len() {
             let res = self.zoom_resolutions[tile_id.z];
             let tile_map_size = res * self.tile_size as f64;
@@ -160,7 +160,10 @@ impl Tiling {
             let ymax = self.origin_y - tile_id.y as f64 * tile_map_size;
             let ymin = ymax - tile_map_size;
 
-            return Some(Bbox::new(xmin, ymin, xmax, ymax));
+            return Some(Rect::new(
+                Coord { x: xmin, y: ymin },
+                Coord { x: xmax, y: ymax },
+            ));
         }
 
         None

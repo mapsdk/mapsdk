@@ -3,6 +3,7 @@ use std::sync::{
     Arc, RwLock,
 };
 
+use geo::Rect;
 use image::DynamicImage;
 use nanoid::nanoid;
 use tokio::sync::mpsc;
@@ -10,7 +11,6 @@ use tokio::sync::mpsc;
 use crate::{
     env,
     event::Event,
-    geo::QuadCoords,
     layer::{Layer, LayerType},
     map::{context::MapState, Map, MapOptions},
     render::{draw::image::ImageDrawable, Renderer},
@@ -19,7 +19,7 @@ use crate::{
 
 pub struct ImageLayer {
     url: String,
-    coords: QuadCoords,
+    rect: Rect,
     options: ImageLayerOptions,
 
     name: String,
@@ -32,10 +32,10 @@ pub struct ImageLayer {
 }
 
 impl ImageLayer {
-    pub fn new(url: &str, coords: QuadCoords, options: ImageLayerOptions) -> Self {
+    pub fn new(url: &str, rect: Rect, options: ImageLayerOptions) -> Self {
         Self {
             url: url.to_string(),
-            coords,
+            rect,
             options,
 
             name: String::new(),
@@ -109,7 +109,7 @@ impl Layer for ImageLayer {
         if self.image_updated.load(Ordering::SeqCst) {
             if let Ok(image) = self.image.read() {
                 if let Some(image) = image.as_ref() {
-                    let drawable = ImageDrawable::new(renderer, &image, &self.coords);
+                    let drawable = ImageDrawable::new(renderer, &image, &self.rect);
                     renderer.add_draw_item(&self.image_id, drawable.into());
                 }
             }

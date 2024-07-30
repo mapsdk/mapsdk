@@ -7,11 +7,12 @@ use std::{
     time::{Duration, Instant},
 };
 
+use geo::Coord;
 use tokio::{sync::mpsc, task::JoinHandle, time::sleep};
 
 use crate::{
-    env, event::Event, geo::Coord, layer::Layer, map::context::MapContext, render::Renderer,
-    tiling::Tiling, utils::color::Color,
+    env, event::Event, layer::Layer, map::context::MapContext, render::Renderer, tiling::Tiling,
+    utils::color::Color,
 };
 
 pub(crate) mod context;
@@ -276,7 +277,7 @@ impl Default for MapOptions {
     fn default() -> Self {
         Self {
             background_color: Color::from_rgba(0, 0, 0, 0.0),
-            center: Coord::new(0.0, 0.0),
+            center: Coord { x: 0.0, y: 0.0 },
             max_frame_rate: 60,
             pitch: 0.0,
             pitch_max: 80.0,

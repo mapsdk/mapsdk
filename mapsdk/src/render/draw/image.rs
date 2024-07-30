@@ -1,21 +1,18 @@
+use geo::Rect;
 use image::DynamicImage;
 use wgpu::*;
 
-use crate::{
-    geo::QuadCoords,
-    render::{
-        create_image_params_bgl, create_image_texture_bgl, create_texture_from_image,
-        draw::Drawable,
-        resources::{
-            buffer::{
-                create_index_buffer_from_u16_slice, create_uniform_buffer_from_f32_slice,
-                create_uniform_buffer_from_vec4_f32_slice,
-                create_vertex_buffer_from_vec2_f32_slice,
-            },
-            layout::create_camera_bgl,
+use crate::render::{
+    create_image_params_bgl, create_image_texture_bgl, create_texture_from_image,
+    draw::Drawable,
+    resources::{
+        buffer::{
+            create_index_buffer_from_u16_slice, create_uniform_buffer_from_f32_slice,
+            create_uniform_buffer_from_vec4_f32_slice, create_vertex_buffer_from_vec2_f32_slice,
         },
-        DrawItem, MapState, Renderer,
+        layout::create_camera_bgl,
     },
+    DrawItem, MapState, Renderer,
 };
 
 pub struct ImageDrawable {
@@ -26,7 +23,7 @@ pub struct ImageDrawable {
 }
 
 impl ImageDrawable {
-    pub fn new(renderer: &Renderer, image: &DynamicImage, coords: &QuadCoords) -> Self {
+    pub fn new(renderer: &Renderer, image: &DynamicImage, rect: &Rect) -> Self {
         let rendering_context = &renderer.rendering_context;
 
         let texture = create_texture_from_image(rendering_context, image);
@@ -47,10 +44,10 @@ impl ImageDrawable {
         );
 
         let vertices = [
-            [coords.lt.x as f32, coords.lt.y as f32],
-            [coords.lb.x as f32, coords.lb.y as f32],
-            [coords.rt.x as f32, coords.rt.y as f32],
-            [coords.rb.x as f32, coords.rb.y as f32],
+            [rect.min().x as f32, rect.max().y as f32],
+            [rect.min().x as f32, rect.min().y as f32],
+            [rect.max().x as f32, rect.max().y as f32],
+            [rect.max().x as f32, rect.min().y as f32],
         ];
 
         let vertex_buffer = create_vertex_buffer_from_vec2_f32_slice(
