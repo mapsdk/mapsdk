@@ -3,16 +3,14 @@ struct VertexOutput {
     @location(0) texture_coord: vec2<f32>,
 };
 
-// Camera Bind Group
+// Map View BindGroup
 @group(0) @binding(0) var<uniform> view_proj: mat4x4<f32>;
+@group(0) @binding(1) var<uniform> map_center: vec2<f32>;
+@group(0) @binding(2) var<uniform> map_res: f32;
 
-// Texture Bind Group
+// Texture BindGroup
 @group(1) @binding(0) var texture: texture_2d<f32>;
 @group(1) @binding(1) var texture_sampler: sampler;
-
-// Params Bind Group
-@group(2) @binding(0) var<uniform> map_center: vec2<f32>;
-@group(2) @binding(1) var<uniform> map_res: f32;
 
 @vertex
 fn vs_main(

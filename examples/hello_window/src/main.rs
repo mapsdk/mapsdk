@@ -2,7 +2,9 @@ extern crate mapsdk;
 
 use geo::{Coord, Rect};
 use mapsdk::{
+    feature::{Feature, Shape},
     layer::{
+        feature_layer::{FeatureLayer, FeatureLayerOptions},
         image_layer::{ImageLayer, ImageLayerOptions},
         image_tiled_layer::{ImageTiledLayer, ImageTiledLayerOptions},
     },
@@ -82,6 +84,18 @@ impl ApplicationHandler for App {
             let _ = self
                 .map
                 .add_layer("image tiled", Box::new(image_tiled_layer));
+
+            let feature_layer_options = FeatureLayerOptions::default();
+            let mut feature_layer = FeatureLayer::new(feature_layer_options);
+            feature_layer.add_feature(Feature::new(
+                "1",
+                Shape::Circle {
+                    center: Coord { x: 0.0, y: 0.0 },
+                    radius: 1000_000.0,
+                },
+                None,
+            ));
+            let _ = self.map.add_layer("feature", Box::new(feature_layer));
         }
     }
 

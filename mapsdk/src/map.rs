@@ -130,6 +130,7 @@ impl Map {
         {
             if let Ok(mut context) = self.context.lock() {
                 context.layers.insert(name.to_string(), layer);
+                context.state.layers_order.push(name.to_string());
             }
         }
 
@@ -170,6 +171,7 @@ impl Map {
                 }
 
                 context.layers.remove(name);
+                context.state.layers_order.retain(|x| *x != name);
             }
         }
 

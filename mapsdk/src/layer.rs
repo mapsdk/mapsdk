@@ -4,6 +4,7 @@ use crate::{
     render::Renderer,
 };
 
+pub mod feature_layer;
 pub mod image_layer;
 pub mod image_tiled_layer;
 pub(crate) mod tiled;
@@ -17,6 +18,7 @@ pub trait Layer: Send + Sync {
 }
 
 pub enum LayerType {
+    FeatureLayer,
     ImageLayer,
     ImageTiledLayer,
     VectorTiledLayer,

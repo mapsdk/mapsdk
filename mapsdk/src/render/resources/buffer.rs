@@ -5,7 +5,7 @@ use wgpu::{
 
 use crate::render::RenderingContext;
 
-pub(crate) fn create_index_buffer_from_u16_slice(
+pub fn create_index_buffer_from_u16_slice(
     rendering_context: &RenderingContext,
     label: &str,
     slice: &[u16],
@@ -19,7 +19,7 @@ pub(crate) fn create_index_buffer_from_u16_slice(
         })
 }
 
-pub(crate) fn create_uniform_buffer_from_f32_slice(
+pub fn create_uniform_buffer_from_f32_slice(
     rendering_context: &RenderingContext,
     label: &str,
     slice: &[f32],
@@ -33,7 +33,7 @@ pub(crate) fn create_uniform_buffer_from_f32_slice(
         })
 }
 
-pub(crate) fn create_uniform_buffer_from_vec4_f32_slice(
+pub fn create_uniform_buffer_from_vec4_f32_slice(
     rendering_context: &RenderingContext,
     label: &str,
     slice: &[[f32; 4]],
@@ -47,7 +47,7 @@ pub(crate) fn create_uniform_buffer_from_vec4_f32_slice(
         })
 }
 
-pub(crate) fn create_vertex_buffer_from_vec3_f32_slice(
+pub fn create_vertex_buffer_from_vec3_f32_slice(
     rendering_context: &RenderingContext,
     label: &str,
     slice: &[[f32; 3]],

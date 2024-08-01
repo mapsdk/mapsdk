@@ -1,4 +1,4 @@
-pub(crate) mod buffer;
-pub(crate) mod layout;
-pub(crate) mod pipeline;
-pub(crate) mod texture;
+pub mod bind_group;
+pub mod buffer;
+pub mod pipeline;
+pub mod texture;

@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, time::Instant};
+use std::{collections::HashMap, time::Instant};
 
 use geo::{polygon, Coord, Polygon, Rect};
 use glam::{DQuat, DVec3};
@@ -9,7 +9,7 @@ pub struct MapContext {
     pub map_options: MapOptions,
     pub state: MapState,
 
-    pub layers: BTreeMap<String, Box<dyn Layer>>,
+    pub layers: HashMap<String, Box<dyn Layer>>,
     pub renderer: Option<Renderer>,
 }
 
@@ -28,7 +28,7 @@ impl MapContext {
             map_options: map_options.clone(),
             state,
 
-            layers: BTreeMap::new(),
+            layers: HashMap::new(),
             renderer: None,
         }
     }
@@ -242,6 +242,8 @@ pub struct MapState {
     pub zoom: usize,
     pub zoom_res: f64,
 
+    pub layers_order: Vec<String>,
+
     view_bounds: Polygon,
     view_bounds_seq: u64,
     view_seq: u64,
@@ -256,6 +258,8 @@ impl Default for MapState {
             yaw: 0.0,
             zoom: 0,
             zoom_res: 1.0,
+
+            layers_order: Vec::new(),
 
             view_bounds: Rect::new(Coord { x: -1.0, y: -1.0 }, Coord { x: 1.0, y: 1.0 })
                 .to_polygon(),

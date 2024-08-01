@@ -1,5 +1,6 @@
-use std::{collections::HashMap, time::Instant};
+use std::time::Instant;
 
+use dashmap::DashMap;
 use glam::{Quat, Vec3};
 use wgpu::*;
 
@@ -9,9 +10,9 @@ use crate::{
         camera::Camera,
         draw::DrawItem,
         resources::{
-            layout::{create_image_params_bgl, create_image_texture_bgl},
-            pipeline::create_image_pipeline,
-            texture::{create_depth_texture, create_texture_from_image},
+            bind_group::create_image_texture_bgl,
+            pipeline::{create_image_pipeline, create_shape_fill_pipeline},
+            texture::create_depth_texture,
         },
         targets::Window,
     },
@@ -22,6 +23,7 @@ pub(crate) mod camera;
 pub(crate) mod draw;
 pub(crate) mod resources;
 pub(crate) mod targets;
+pub(crate) mod tessellation;
 
 pub struct Renderer {
     renderer_options: RendererOptions,
@@ -31,7 +33,7 @@ pub struct Renderer {
     rendering_resources: RenderingResources,
 
     camera: Camera,
-    draw_items: HashMap<String, DrawItem>,
+    layer_draw_items: DashMap<String, DashMap<String, DrawItem>>,
 }
 
 impl Renderer {
@@ -96,7 +98,9 @@ impl Renderer {
                         ..Default::default()
                     }),
                     depth_texture_view,
+
                     image_pipeline: create_image_pipeline(&rendering_context),
+                    shape_fill_pipeline: create_shape_fill_pipeline(&rendering_context),
                 };
 
                 let mut camera = Camera::default();
@@ -111,22 +115,37 @@ impl Renderer {
                     rendering_resources,
 
                     camera,
-                    draw_items: HashMap::new(),
+                    layer_draw_items: DashMap::new(),
                 }
             }
         }
     }
 
-    pub fn add_draw_item(&mut self, id: &str, draw_item: DrawItem) {
-        self.draw_items.insert(id.to_string(), draw_item);
+    pub fn add_layer_draw_item(
+        &mut self,
+        layer_name: &str,
+        item_id: &impl ToString,
+        draw_item: DrawItem,
+    ) {
+        self.layer_draw_items
+            .entry(layer_name.to_string())
+            .or_insert(DashMap::new());
+
+        if let Some(layer) = self.layer_draw_items.get_mut(layer_name) {
+            layer.insert(item_id.to_string(), draw_item);
+        }
     }
 
     pub fn camera(&self) -> &Camera {
         &self.camera
     }
 
-    pub fn contains_draw_item(&self, id: &str) -> bool {
-        self.draw_items.contains_key(id)
+    pub fn contains_layer_draw_item(&self, layer_name: &str, item_id: &impl ToString) -> bool {
+        if let Some(layer) = self.layer_draw_items.get(layer_name) {
+            layer.contains_key(&item_id.to_string())
+        } else {
+            false
+        }
     }
 
     pub fn width(&self) -> u32 {
@@ -137,8 +156,10 @@ impl Renderer {
         self.rendering_size.height
     }
 
-    pub fn remove_draw_item(&mut self, id: &str) {
-        self.draw_items.remove(id);
+    pub fn remove_layer_draw_item(&mut self, layer_name: &str, item_id: &impl ToString) {
+        if let Some(layer) = self.layer_draw_items.get_mut(layer_name) {
+            layer.remove(&item_id.to_string());
+        }
     }
 
     pub fn render(&mut self, map_state: &MapState) {
@@ -181,8 +202,14 @@ impl Renderer {
                     occlusion_query_set: None,
                 });
 
-                for (_, draw_item) in &self.draw_items {
-                    draw_item.draw(map_state, self, &mut render_pass);
+                for layer_name in &map_state.layers_order {
+                    if let Some(layer_pair) = self.layer_draw_items.get(layer_name) {
+                        for draw_item_pair in layer_pair.value() {
+                            draw_item_pair
+                                .value()
+                                .draw(map_state, self, &mut render_pass);
+                        }
+                    }
                 }
             }
 
@@ -280,7 +307,9 @@ pub enum RendererType {
 pub(crate) struct RenderingResources {
     color_sampler: Sampler,
     depth_texture_view: TextureView,
+
     image_pipeline: RenderPipeline,
+    shape_fill_pipeline: RenderPipeline,
 }
 
 pub(crate) struct RenderingContext {

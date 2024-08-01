@@ -3,14 +3,14 @@ use image::DynamicImage;
 use wgpu::*;
 
 use crate::render::{
-    create_image_params_bgl, create_image_texture_bgl, create_texture_from_image,
     draw::Drawable,
     resources::{
-        buffer::{
-            create_index_buffer_from_u16_slice, create_uniform_buffer_from_f32_slice,
-            create_uniform_buffer_from_vec4_f32_slice, create_vertex_buffer_from_vec3_f32_slice,
+        bind_group::{
+            create_image_texture_bg, create_image_texture_bgl, create_map_view_bg,
+            create_map_view_bgl,
         },
-        layout::create_camera_bgl,
+        buffer::{create_index_buffer_from_u16_slice, create_vertex_buffer_from_vec3_f32_slice},
+        texture::create_texture_from_image,
     },
     DrawItem, MapState, Renderer,
 };
@@ -22,7 +22,7 @@ pub struct ImageDrawable {
 }
 
 impl ImageDrawable {
-    pub fn new(renderer: &Renderer, image: &DynamicImage, rect: &Rect, z: f64) -> Self {
+    pub fn new(renderer: &Renderer, image: &DynamicImage, bbox: &Rect, z: f64) -> Self {
         let rendering_context = &renderer.rendering_context;
 
         let texture = create_texture_from_image(rendering_context, image);
@@ -44,10 +44,10 @@ impl ImageDrawable {
         let texture_view = texture.create_view(&TextureViewDescriptor::default());
 
         let vertices = [
-            [rect.min().x as f32, rect.max().y as f32, z as f32],
-            [rect.min().x as f32, rect.min().y as f32, z as f32],
-            [rect.max().x as f32, rect.max().y as f32, z as f32],
-            [rect.max().x as f32, rect.min().y as f32, z as f32],
+            [bbox.min().x as f32, bbox.max().y as f32, z as f32],
+            [bbox.min().x as f32, bbox.min().y as f32, z as f32],
+            [bbox.max().x as f32, bbox.max().y as f32, z as f32],
+            [bbox.max().x as f32, bbox.min().y as f32, z as f32],
         ];
 
         let vertex_buffer = create_vertex_buffer_from_vec3_f32_slice(
@@ -56,7 +56,7 @@ impl ImageDrawable {
             &vertices,
         );
 
-        let vertex_indices: [u16; 6] = [0, 1, 2, 2, 1, 3];
+        let vertex_indices: [u16; 6] = [0, 2, 1, 1, 2, 3];
         let vertex_index_buffer = create_index_buffer_from_u16_slice(
             rendering_context,
             "Image vertex index buffer",
@@ -76,75 +76,25 @@ impl Drawable for ImageDrawable {
         let rendering_context = &renderer.rendering_context;
         let rendering_resources = &renderer.rendering_resources;
 
-        let camera_buffer = create_uniform_buffer_from_vec4_f32_slice(
+        let map_view_bind_group_layout = create_map_view_bgl(rendering_context);
+        let map_view_bind_group = create_map_view_bg(
             rendering_context,
-            "Camera buffer",
-            &renderer.camera.view_proj(),
+            &map_view_bind_group_layout,
+            &renderer.camera,
+            &map_state,
         );
-        let camera_bind_group_layout = create_camera_bgl(rendering_context);
-        let camera_bind_group = rendering_context
-            .device
-            .create_bind_group(&BindGroupDescriptor {
-                label: Some("Camera BindGroup"),
-                layout: &camera_bind_group_layout,
-                entries: &[BindGroupEntry {
-                    binding: 0,
-                    resource: camera_buffer.as_entire_binding(),
-                }],
-            });
 
         let texture_bind_group_layout = create_image_texture_bgl(rendering_context);
-        let texture_bind_group = rendering_context
-            .device
-            .create_bind_group(&BindGroupDescriptor {
-                label: Some("Image Texture BindGroup"),
-                layout: &texture_bind_group_layout,
-                entries: &[
-                    BindGroupEntry {
-                        binding: 0,
-                        resource: BindingResource::TextureView(&self.texture_view),
-                    },
-                    BindGroupEntry {
-                        binding: 1,
-                        resource: BindingResource::Sampler(&rendering_resources.color_sampler),
-                    },
-                ],
-            });
-
-        let map_center_buffer = create_uniform_buffer_from_f32_slice(
+        let texture_bind_group = create_image_texture_bg(
             rendering_context,
-            "Image MapCenter Buffer",
-            &[map_state.center.x as f32, map_state.center.y as f32],
+            &texture_bind_group_layout,
+            &self.texture_view,
+            &rendering_resources.color_sampler,
         );
-
-        let map_res_buffer = create_uniform_buffer_from_f32_slice(
-            rendering_context,
-            "Image MapRes Buffer",
-            &[(map_state.zoom_res * map_state.map_res_ratio) as f32],
-        );
-
-        let params_bind_group_layout = create_image_params_bgl(rendering_context);
-        let params_bind_group = rendering_context
-            .device
-            .create_bind_group(&BindGroupDescriptor {
-                label: Some("Image Params BindGroup"),
-                layout: &params_bind_group_layout,
-                entries: &[
-                    BindGroupEntry {
-                        binding: 0,
-                        resource: map_center_buffer.as_entire_binding(),
-                    },
-                    BindGroupEntry {
-                        binding: 1,
-                        resource: map_res_buffer.as_entire_binding(),
-                    },
-                ],
-            });
 
         render_pass.set_pipeline(&rendering_resources.image_pipeline);
-        render_pass.set_bind_group(0, &camera_bind_group, &[]);
+        render_pass.set_bind_group(0, &map_view_bind_group, &[]);
         render_pass.set_bind_group(1, &texture_bind_group, &[]);
-        render_pass.set_bind_group(2, &params_bind_group, &[]);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.vertex_index_buffer.slice(..), IndexFormat::Uint16);
         render_pass.draw_indexed(0..6, 0, 0..1);

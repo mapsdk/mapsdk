@@ -14,8 +14,11 @@ mapsdk = "0.1.0"
 
 pub(crate) mod env;
 pub(crate) mod event;
+pub mod feature;
 pub mod layer;
 pub mod map;
 pub mod render;
 pub mod tiling;
 pub mod utils;
+
+pub type JsonValue = serde_json::value::Value;

@@ -110,7 +110,7 @@ impl Layer for ImageLayer {
             if let Ok(image) = self.image.read() {
                 if let Some(image) = image.as_ref() {
                     let drawable = ImageDrawable::new(renderer, &image, &self.rect, self.options.z);
-                    renderer.add_draw_item(&self.image_id, drawable.into());
+                    renderer.add_layer_draw_item(&self.name, &self.image_id, drawable.into());
                 }
             }
 

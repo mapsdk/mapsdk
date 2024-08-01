@@ -54,10 +54,6 @@ impl ImageTiledLayer {
             tile_images: Arc::new(DashMap::new()),
         }
     }
-
-    fn format_draw_item_id(&self, tile_id: &TileId) -> String {
-        format!("[{}]{}", self.name, tile_id.to_string())
-    }
 }
 
 impl Layer for ImageTiledLayer {
@@ -252,8 +248,7 @@ impl Layer for ImageTiledLayer {
             for tile_id in dirty_tiles {
                 self.tile_images.remove(&tile_id);
 
-                let draw_item_id = self.format_draw_item_id(&tile_id);
-                renderer.remove_draw_item(&draw_item_id);
+                renderer.remove_layer_draw_item(&self.name, &tile_id);
             }
         }
 
@@ -262,10 +257,9 @@ impl Layer for ImageTiledLayer {
             let image = pair.value();
 
             if let Some(bbox) = map_options.tiling.get_tile_bbox(&tile_id) {
-                let draw_item_id = self.format_draw_item_id(&tile_id);
-                if !renderer.contains_draw_item(&draw_item_id) {
+                if !renderer.contains_layer_draw_item(&self.name, tile_id) {
                     let drawable = ImageDrawable::new(renderer, &image, &bbox, self.options.z);
-                    renderer.add_draw_item(&draw_item_id, drawable.into());
+                    renderer.add_layer_draw_item(&self.name, tile_id, drawable.into());
                 }
             }
         }

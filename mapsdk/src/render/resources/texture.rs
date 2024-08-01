@@ -3,7 +3,7 @@ use wgpu::*;
 
 use crate::render::RenderingContext;
 
-pub(crate) fn create_depth_texture(
+pub fn create_depth_texture(
     rendering_context: &RenderingContext,
     width: u32,
     height: u32,
@@ -30,7 +30,7 @@ pub(crate) fn create_depth_texture(
     rendering_context.device.create_texture(&texture_desc)
 }
 
-pub(crate) fn create_texture_from_image(
+pub fn create_texture_from_image(
     rendering_context: &RenderingContext,
     image: &DynamicImage,
 ) -> Texture {
