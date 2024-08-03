@@ -5,7 +5,9 @@ use nanoid::nanoid;
 
 use crate::JsonValue;
 
-#[derive(Debug)]
+pub mod style;
+
+#[derive(Clone, Debug)]
 pub struct Feature {
     id: String,
     shape: Shape,
@@ -83,7 +85,7 @@ impl Features {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Shape {
     Geometry(Geometry),
     Circle { center: Coord, radius: f64 },

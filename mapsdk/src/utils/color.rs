@@ -26,3 +26,14 @@ impl Into<wgpu::Color> for Color {
         }
     }
 }
+
+impl Into<[f32; 4]> for Color {
+    fn into(self) -> [f32; 4] {
+        [
+            self.r as f32 / 255.0,
+            self.g as f32 / 255.0,
+            self.b as f32 / 255.0,
+            self.a as f32,
+        ]
+    }
+}

@@ -12,15 +12,17 @@ struct VertexOutput {
 @group(1) @binding(0) var texture: texture_2d<f32>;
 @group(1) @binding(1) var texture_sampler: sampler;
 
+// Image Params
+@group(2) @binding(0) var<uniform> z: f32;
+
 @vertex
 fn vs_main(
-    @location(0) vertex_coord: vec3<f32>,
+    @location(0) vertex_coord: vec2<f32>,
     @builtin(vertex_index) vertex_idx: u32
     ) -> VertexOutput {
     var x = (vertex_coord[0] - map_center[0]) / map_res;
     var y = (vertex_coord[1] - map_center[1]) / map_res;
-    var z = vertex_coord[2] / map_res;
-    var position = view_proj * vec4<f32>(x, y, z, 1.0);
+    var position = view_proj * vec4<f32>(x, y, z / map_res, 1.0);
 
     var texture_coords = array<vec2<f32>, 4>(
         vec2<f32>(0.0, 0.0),

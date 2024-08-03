@@ -5,7 +5,7 @@ use tokio::sync::mpsc;
 
 use crate::{
     event::Event,
-    feature::{Feature, Features},
+    feature::{style::ShapeStyles, Feature, Features},
     layer::{Layer, LayerType},
     map::{context::MapState, Map, MapOptions},
     render::{draw::feature::FeatureDrawable, Renderer},
@@ -88,7 +88,12 @@ impl Layer for FeatureLayer {
             let feature = pair.value();
 
             if !renderer.contains_layer_draw_item(&self.name, &feature_id) {
-                let drawable = FeatureDrawable::new(renderer, &feature, self.options.z);
+                let drawable = FeatureDrawable::new(
+                    renderer,
+                    &feature,
+                    self.options.z,
+                    &self.options.shape_styles,
+                );
                 renderer.add_layer_draw_item(&self.name, &feature_id, drawable.into());
             }
         }
@@ -96,10 +101,16 @@ impl Layer for FeatureLayer {
 }
 
 pub struct FeatureLayerOptions {
+    shape_styles: ShapeStyles,
     z: f64,
 }
 
 impl FeatureLayerOptions {
+    pub fn with_shape_styles(mut self, v: ShapeStyles) -> Self {
+        self.shape_styles = v;
+        self
+    }
+
     pub fn with_z(mut self, v: f64) -> Self {
         self.z = v;
         self
@@ -108,6 +119,9 @@ impl FeatureLayerOptions {
 
 impl Default for FeatureLayerOptions {
     fn default() -> Self {
-        Self { z: 0.0 }
+        Self {
+            shape_styles: ShapeStyles::default(),
+            z: 0.0,
+        }
     }
 }

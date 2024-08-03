@@ -44,6 +44,7 @@ impl ApplicationHandler for App {
         if let Ok(window) = event_loop.create_window(
             Window::default_attributes()
                 .with_title("MapSDK - Hello Window")
+                .with_transparent(true)
                 .with_inner_size(LogicalSize::new(800.0, 500.0)),
         ) {
             let renderer = pollster::block_on(Renderer::new(

@@ -47,10 +47,38 @@ pub fn create_uniform_buffer_from_vec4_f32_slice(
         })
 }
 
-pub fn create_vertex_buffer_from_vec3_f32_slice(
+pub fn create_vertex_buffer_from_vec2_f32_slice(
     rendering_context: &RenderingContext,
     label: &str,
-    slice: &[[f32; 3]],
+    slice: &[[f32; 2]],
+) -> Buffer {
+    rendering_context
+        .device
+        .create_buffer_init(&BufferInitDescriptor {
+            label: Some(label),
+            contents: bytemuck::cast_slice(&slice),
+            usage: BufferUsages::VERTEX,
+        })
+}
+
+pub fn create_vertex_buffer_from_vec4_f32_slice(
+    rendering_context: &RenderingContext,
+    label: &str,
+    slice: &[[f32; 4]],
+) -> Buffer {
+    rendering_context
+        .device
+        .create_buffer_init(&BufferInitDescriptor {
+            label: Some(label),
+            contents: bytemuck::cast_slice(&slice),
+            usage: BufferUsages::VERTEX,
+        })
+}
+
+pub fn create_vertex_buffer_from_vec5_f32_slice(
+    rendering_context: &RenderingContext,
+    label: &str,
+    slice: &[[f32; 5]],
 ) -> Buffer {
     rendering_context
         .device

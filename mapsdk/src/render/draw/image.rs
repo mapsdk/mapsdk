@@ -6,10 +6,10 @@ use crate::render::{
     draw::Drawable,
     resources::{
         bind_group::{
-            create_image_texture_bg, create_image_texture_bgl, create_map_view_bg,
-            create_map_view_bgl,
+            create_image_params_bg, create_image_params_bgl, create_image_texture_bg,
+            create_image_texture_bgl, create_map_view_bg, create_map_view_bgl,
         },
-        buffer::{create_index_buffer_from_u16_slice, create_vertex_buffer_from_vec3_f32_slice},
+        buffer::{create_index_buffer_from_u16_slice, create_vertex_buffer_from_vec2_f32_slice},
         texture::create_texture_from_image,
     },
     DrawItem, MapState, Renderer,
@@ -17,8 +17,10 @@ use crate::render::{
 
 pub struct ImageDrawable {
     texture_view: TextureView,
+    z: f32,
+
     vertex_buffer: Buffer,
-    vertex_index_buffer: Buffer,
+    index_buffer: Buffer,
 }
 
 impl ImageDrawable {
@@ -44,29 +46,27 @@ impl ImageDrawable {
         let texture_view = texture.create_view(&TextureViewDescriptor::default());
 
         let vertices = [
-            [bbox.min().x as f32, bbox.max().y as f32, z as f32],
-            [bbox.min().x as f32, bbox.min().y as f32, z as f32],
-            [bbox.max().x as f32, bbox.max().y as f32, z as f32],
-            [bbox.max().x as f32, bbox.min().y as f32, z as f32],
+            [bbox.min().x as f32, bbox.max().y as f32],
+            [bbox.min().x as f32, bbox.min().y as f32],
+            [bbox.max().x as f32, bbox.max().y as f32],
+            [bbox.max().x as f32, bbox.min().y as f32],
         ];
-
-        let vertex_buffer = create_vertex_buffer_from_vec3_f32_slice(
+        let vertex_buffer = create_vertex_buffer_from_vec2_f32_slice(
             rendering_context,
-            "Image vertex buffer",
+            "Image VertexBuffer",
             &vertices,
         );
 
-        let vertex_indices: [u16; 6] = [0, 2, 1, 1, 2, 3];
-        let vertex_index_buffer = create_index_buffer_from_u16_slice(
-            rendering_context,
-            "Image vertex index buffer",
-            &vertex_indices,
-        );
+        let indices: [u16; 6] = [0, 2, 1, 1, 2, 3];
+        let index_buffer =
+            create_index_buffer_from_u16_slice(rendering_context, "Image IndexBuffer", &indices);
 
         Self {
+            z: z as f32,
             texture_view,
+
             vertex_buffer,
-            vertex_index_buffer,
+            index_buffer,
         }
     }
 }
@@ -76,27 +76,31 @@ impl Drawable for ImageDrawable {
         let rendering_context = &renderer.rendering_context;
         let rendering_resources = &renderer.rendering_resources;
 
-        let map_view_bind_group_layout = create_map_view_bgl(rendering_context);
-        let map_view_bind_group = create_map_view_bg(
+        let map_view_bgl = create_map_view_bgl(rendering_context);
+        let map_view_bg = create_map_view_bg(
             rendering_context,
-            &map_view_bind_group_layout,
+            &map_view_bgl,
             &renderer.camera,
             &map_state,
         );
 
-        let texture_bind_group_layout = create_image_texture_bgl(rendering_context);
-        let texture_bind_group = create_image_texture_bg(
+        let image_texture_bgl = create_image_texture_bgl(rendering_context);
+        let image_texture_bg = create_image_texture_bg(
             rendering_context,
-            &texture_bind_group_layout,
+            &image_texture_bgl,
             &self.texture_view,
             &rendering_resources.color_sampler,
         );
 
+        let image_params_bgl = create_image_params_bgl(rendering_context);
+        let image_params_bg = create_image_params_bg(rendering_context, &image_params_bgl, self.z);
+
         render_pass.set_pipeline(&rendering_resources.image_pipeline);
-        render_pass.set_bind_group(0, &map_view_bind_group, &[]);
-        render_pass.set_bind_group(1, &texture_bind_group, &[]);
+        render_pass.set_bind_group(0, &map_view_bg, &[]);
+        render_pass.set_bind_group(1, &image_texture_bg, &[]);
+        render_pass.set_bind_group(2, &image_params_bg, &[]);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(self.vertex_index_buffer.slice(..), IndexFormat::Uint16);
+        render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint16);
         render_pass.draw_indexed(0..6, 0, 0..1);
     }
 }

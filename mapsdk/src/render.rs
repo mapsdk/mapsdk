@@ -10,9 +10,7 @@ use crate::{
         camera::Camera,
         draw::DrawItem,
         resources::{
-            bind_group::create_image_texture_bgl,
-            pipeline::{create_image_pipeline, create_shape_fill_pipeline},
-            texture::create_depth_texture,
+            bind_group::create_image_texture_bgl, pipeline::*, texture::create_depth_texture,
         },
         targets::Window,
     },
@@ -42,6 +40,7 @@ impl Renderer {
             RendererType::Window(window) => {
                 let width = window.width();
                 let height = window.height();
+                let pixel_ratio = window.scale_factor();
 
                 let instance = Instance::default();
                 let surface = instance
@@ -72,11 +71,19 @@ impl Renderer {
                     )
                     .await
                     .expect("Failed to find device");
-                if let Some(config) = surface.get_default_config(&adapter, width, height) {
+                if let Some(mut config) = surface.get_default_config(&adapter, width, height) {
+                    if surface
+                        .get_capabilities(&adapter)
+                        .alpha_modes
+                        .contains(&CompositeAlphaMode::PreMultiplied)
+                    {
+                        config.alpha_mode = CompositeAlphaMode::PreMultiplied;
+                    }
                     surface.configure(&device, &config);
                 }
 
                 let rendering_context = RenderingContext {
+                    pixel_ratio,
                     surface,
                     adapter,
                     device,
@@ -101,6 +108,7 @@ impl Renderer {
 
                     image_pipeline: create_image_pipeline(&rendering_context),
                     shape_fill_pipeline: create_shape_fill_pipeline(&rendering_context),
+                    shape_stroke_pipeline: create_shape_stroke_pipeline(&rendering_context),
                 };
 
                 let mut camera = Camera::default();
@@ -310,9 +318,11 @@ pub(crate) struct RenderingResources {
 
     image_pipeline: RenderPipeline,
     shape_fill_pipeline: RenderPipeline,
+    shape_stroke_pipeline: RenderPipeline,
 }
 
 pub(crate) struct RenderingContext {
+    pixel_ratio: f64,
     surface: Surface<'static>,
     adapter: Adapter,
     device: Device,
