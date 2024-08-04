@@ -1,21 +1,27 @@
 pub mod circle;
+pub mod line_string;
+pub mod polygon;
 
-pub struct Tessellation {
-    pub fill_vertices: Vec<[f32; 2]>,
-    pub fill_indices: Vec<u16>,
-
-    pub stroke_vertices: Vec<[f32; 5]>, // x, y, norm_x, norm_y, angle
-    pub stroke_indices: Vec<u16>,
+pub struct Tessellations {
+    pub fills: Vec<FillVertexIndex>,
+    pub strokes: Vec<StrokeVertexIndex>,
 }
 
-impl Tessellation {
+impl Tessellations {
     pub fn new() -> Self {
         Self {
-            fill_vertices: Vec::new(),
-            fill_indices: Vec::new(),
-
-            stroke_vertices: Vec::new(),
-            stroke_indices: Vec::new(),
+            fills: Vec::new(),
+            strokes: Vec::new(),
         }
     }
+}
+
+pub struct FillVertexIndex {
+    pub vertices: Vec<[f32; 2]>,
+    pub indices: Vec<u16>,
+}
+
+pub struct StrokeVertexIndex {
+    pub vertices: Vec<[f32; 5]>, // x, y, norm_x, norm_y, angle
+    pub indices: Vec<u16>,
 }
