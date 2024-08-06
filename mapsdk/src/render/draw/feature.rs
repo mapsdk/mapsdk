@@ -1,9 +1,9 @@
-use geo::Geometry::*;
 use wgpu::*;
 
 use crate::{
     feature::{style::ShapeStyles, Feature, Shape},
     render::{
+        create_symbol_circle_params_bg, create_symbol_circle_params_bgl,
         draw::Drawable,
         resources::{
             bind_group::{
@@ -13,10 +13,7 @@ use crate::{
             },
             buffer::VertexIndexBuffer,
         },
-        tessellation::{
-            circle::tessellate_circle, line_string::tessellate_line_string,
-            polygon::tessellate_polygon, Tessellations,
-        },
+        tessellation::{circle::tessellate_circle, geometry::tessellate_geometry, Tessellations},
         DrawItem, MapState, Renderer,
     },
 };
@@ -38,11 +35,7 @@ impl FeatureDrawable {
 
         let tessellations = match feature.shape() {
             Shape::Circle { center, radius } => tessellate_circle(center, *radius as f32, 6),
-            Shape::Geometry(geom) => match geom {
-                Polygon(polygon) => tessellate_polygon(polygon, 1e-6),
-                LineString(line_string) => tessellate_line_string(line_string, false),
-                _ => todo!(),
-            },
+            Shape::Geometry(geom) => tessellate_geometry(&geom),
         };
 
         let mut fill_buffers: Vec<VertexIndexBuffer> = Vec::new();
@@ -88,43 +81,65 @@ impl Drawable for FeatureDrawable {
             &map_state,
         );
 
-        if self.shape_styles.fill_enabled {
-            let shape_fill_params_bgl = create_shape_fill_params_bgl(rendering_context);
-            let shape_fill_params_bg = create_shape_fill_params_bg(
+        if self.feature.shape().is_points() {
+            let symbol_circle_params_bgl = create_symbol_circle_params_bgl(rendering_context);
+            let symbol_circle_params_bg = create_symbol_circle_params_bg(
                 rendering_context,
-                &shape_fill_params_bgl,
+                &symbol_circle_params_bgl,
                 self.z,
                 &self.shape_styles,
             );
 
             for fill_buffer in &self.fill_buffers {
-                render_pass.set_pipeline(&rendering_resources.shape_fill_pipeline);
+                render_pass.set_pipeline(&rendering_resources.symbol_circle_pipeline);
                 render_pass.set_bind_group(0, &map_view_bg, &[]);
-                render_pass.set_bind_group(1, &shape_fill_params_bg, &[]);
+                render_pass.set_bind_group(1, &symbol_circle_params_bg, &[]);
                 render_pass.set_vertex_buffer(0, fill_buffer.vertex_buffer.slice(..));
                 render_pass
                     .set_index_buffer(fill_buffer.index_buffer.slice(..), IndexFormat::Uint16);
                 render_pass.draw_indexed(0..fill_buffer.index_count, 0, 0..1);
             }
-        }
+        } else {
+            if self.shape_styles.fill_enabled {
+                let shape_fill_params_bgl = create_shape_fill_params_bgl(rendering_context);
+                let shape_fill_params_bg = create_shape_fill_params_bg(
+                    rendering_context,
+                    &shape_fill_params_bgl,
+                    self.z,
+                    &self.shape_styles,
+                );
 
-        if self.shape_styles.stroke_enabled {
-            let shape_stroke_params_bgl = create_shape_stroke_params_bgl(rendering_context);
-            let shape_stroke_params_bg = create_shape_stroke_params_bg(
-                rendering_context,
-                &shape_stroke_params_bgl,
-                self.z,
-                &self.shape_styles,
-            );
+                for fill_buffer in &self.fill_buffers {
+                    render_pass.set_pipeline(&rendering_resources.shape_fill_pipeline);
+                    render_pass.set_bind_group(0, &map_view_bg, &[]);
+                    render_pass.set_bind_group(1, &shape_fill_params_bg, &[]);
+                    render_pass.set_vertex_buffer(0, fill_buffer.vertex_buffer.slice(..));
+                    render_pass
+                        .set_index_buffer(fill_buffer.index_buffer.slice(..), IndexFormat::Uint16);
+                    render_pass.draw_indexed(0..fill_buffer.index_count, 0, 0..1);
+                }
+            }
 
-            for stroke_buffer in &self.stroke_buffers {
-                render_pass.set_pipeline(&rendering_resources.shape_stroke_pipeline);
-                render_pass.set_bind_group(0, &map_view_bg, &[]);
-                render_pass.set_bind_group(1, &shape_stroke_params_bg, &[]);
-                render_pass.set_vertex_buffer(0, stroke_buffer.vertex_buffer.slice(..));
-                render_pass
-                    .set_index_buffer(stroke_buffer.index_buffer.slice(..), IndexFormat::Uint16);
-                render_pass.draw_indexed(0..stroke_buffer.index_count, 0, 0..1);
+            if self.shape_styles.stroke_enabled {
+                let shape_stroke_params_bgl = create_shape_stroke_params_bgl(rendering_context);
+                let shape_stroke_params_bg = create_shape_stroke_params_bg(
+                    rendering_context,
+                    &shape_stroke_params_bgl,
+                    self.z,
+                    &self.shape_styles,
+                );
+
+                for stroke_buffer in &self.stroke_buffers {
+                    render_pass.set_pipeline(&rendering_resources.shape_stroke_pipeline);
+                    render_pass.set_bind_group(0, &map_view_bg, &[]);
+                    render_pass.set_bind_group(1, &shape_stroke_params_bg, &[]);
+                    render_pass.set_vertex_buffer(0, stroke_buffer.vertex_buffer.slice(..));
+                    render_pass.set_index_buffer(
+                        stroke_buffer.index_buffer.slice(..),
+                        IndexFormat::Uint16,
+                    );
+                    render_pass.draw_indexed(0..stroke_buffer.index_count, 0, 0..1);
+                }
             }
         }
     }

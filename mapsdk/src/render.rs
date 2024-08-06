@@ -9,9 +9,7 @@ use crate::{
     render::{
         camera::Camera,
         draw::DrawItem,
-        resources::{
-            bind_group::create_image_texture_bgl, pipeline::*, texture::create_depth_texture,
-        },
+        resources::{bind_group::*, pipeline::*, texture::create_depth_texture},
         targets::Window,
     },
     utils::size::PixelSize,
@@ -109,6 +107,7 @@ impl Renderer {
                     image_pipeline: create_image_pipeline(&rendering_context),
                     shape_fill_pipeline: create_shape_fill_pipeline(&rendering_context),
                     shape_stroke_pipeline: create_shape_stroke_pipeline(&rendering_context),
+                    symbol_circle_pipeline: create_symbol_circle_pipeline(&rendering_context),
                 };
 
                 let mut camera = Camera::default();
@@ -319,6 +318,7 @@ pub(crate) struct RenderingResources {
     image_pipeline: RenderPipeline,
     shape_fill_pipeline: RenderPipeline,
     shape_stroke_pipeline: RenderPipeline,
+    symbol_circle_pipeline: RenderPipeline,
 }
 
 pub(crate) struct RenderingContext {

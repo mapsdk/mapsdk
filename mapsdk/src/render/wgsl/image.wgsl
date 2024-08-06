@@ -22,7 +22,8 @@ fn vs_main(
     ) -> VertexOutput {
     var x = (vertex_coord[0] - map_center[0]) / map_res;
     var y = (vertex_coord[1] - map_center[1]) / map_res;
-    var position = view_proj * vec4<f32>(x, y, z / map_res, 1.0);
+    
+    let position = view_proj * vec4<f32>(x, y, z / map_res, 1.0);
 
     var texture_coords = array<vec2<f32>, 4>(
         vec2<f32>(0.0, 0.0),
@@ -30,7 +31,7 @@ fn vs_main(
         vec2<f32>(1.0, 0.0),
         vec2<f32>(1.0, 1.0)
     );
-    var texture_coord = texture_coords[vertex_idx];
+    let texture_coord = texture_coords[vertex_idx];
 
     return VertexOutput(position, texture_coord);
 }

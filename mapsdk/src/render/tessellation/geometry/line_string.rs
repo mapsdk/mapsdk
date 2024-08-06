@@ -2,7 +2,7 @@ use glam::Vec2;
 
 use crate::render::tessellation::{StrokeVertexIndex, Tessellations};
 
-pub fn tessellate_line_string(line_string: &geo::LineString, closed: bool) -> Tessellations {
+pub fn tessellate_line_string(line_string: &geo::LineString) -> Tessellations {
     let mut output: Tessellations = Tessellations::new();
 
     {
@@ -20,7 +20,7 @@ pub fn tessellate_line_string(line_string: &geo::LineString, closed: bool) -> Te
             let vec_prev: Vec2;
             let vec_next: Vec2;
 
-            if closed && (i == 0 || i == vertices.len() - 1) {
+            if line_string.is_closed() && (i == 0 || i == vertices.len() - 1) {
                 let vertex_prev = vertices[vertices.len() - 2];
                 let vertex_next = vertices[1];
 
@@ -90,6 +90,17 @@ pub fn tessellate_line_string(line_string: &geo::LineString, closed: bool) -> Te
             vertices: stroke_vertices,
             indices: stroke_indices,
         });
+    }
+
+    output
+}
+
+pub fn tessellate_multi_line_string(multi_line_string: &geo::MultiLineString) -> Tessellations {
+    let mut output: Tessellations = Tessellations::new();
+
+    for line_string in multi_line_string.iter() {
+        let line_string_tessellations = tessellate_line_string(&line_string);
+        output.strokes.extend(line_string_tessellations.strokes);
     }
 
     output

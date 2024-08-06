@@ -8,7 +8,7 @@ use lyon::{
 };
 
 use crate::render::tessellation::{
-    line_string::tessellate_line_string, FillVertexIndex, Tessellations,
+    geometry::line_string::tessellate_line_string, FillVertexIndex, Tessellations,
 };
 
 pub fn tessellate_circle(center: &geo::Coord, radius: f32, flatten: usize) -> Tessellations {
@@ -62,7 +62,7 @@ pub fn tessellate_circle(center: &geo::Coord, radius: f32, flatten: usize) -> Te
             })
             .collect::<Vec<_>>()
             .into();
-        let line_tessellations = tessellate_line_string(&line_string, true);
+        let line_tessellations = tessellate_line_string(&line_string);
 
         output.strokes = line_tessellations.strokes;
     }

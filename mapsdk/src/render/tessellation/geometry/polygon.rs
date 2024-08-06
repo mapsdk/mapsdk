@@ -5,10 +5,10 @@ use lyon::{
 };
 
 use crate::render::tessellation::{
-    line_string::tessellate_line_string, FillVertexIndex, Tessellations,
+    geometry::line_string::tessellate_line_string, FillVertexIndex, Tessellations,
 };
 
-pub fn tessellate_polygon(polygon: &geo::Polygon, tolerance: f32) -> Tessellations {
+pub fn tessellate_polygon(polygon: &geo::Polygon) -> Tessellations {
     let mut output: Tessellations = Tessellations::new();
 
     {
@@ -49,7 +49,7 @@ pub fn tessellate_polygon(polygon: &geo::Polygon, tolerance: f32) -> Tessellatio
 
         let path = path_builder.build();
 
-        let options = FillOptions::tolerance(tolerance);
+        let options = FillOptions::tolerance(f32::EPSILON);
 
         let mut tessellator = FillTessellator::new();
         if let Err(err) = tessellator.tessellate_path(&path, &options, &mut buffers_builder) {
@@ -64,13 +64,25 @@ pub fn tessellate_polygon(polygon: &geo::Polygon, tolerance: f32) -> Tessellatio
 
     {
         let exterior = polygon.exterior();
-        let exterior_tessellations = tessellate_line_string(&exterior, true);
+        let exterior_tessellations = tessellate_line_string(&exterior);
         output.strokes.extend(exterior_tessellations.strokes);
 
         for interior in polygon.interiors() {
-            let interior_tessellations = tessellate_line_string(&interior, true);
+            let interior_tessellations = tessellate_line_string(&interior);
             output.strokes.extend(interior_tessellations.strokes);
         }
+    }
+
+    output
+}
+
+pub fn tessellate_multi_polygon(multi_polygon: &geo::MultiPolygon) -> Tessellations {
+    let mut output: Tessellations = Tessellations::new();
+
+    for polygon in multi_polygon.iter() {
+        let polygon_tessellations = tessellate_polygon(&polygon);
+        output.fills.extend(polygon_tessellations.fills);
+        output.strokes.extend(polygon_tessellations.strokes);
     }
 
     output

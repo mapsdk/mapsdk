@@ -36,7 +36,7 @@ pub fn create_image_params_bgl(rendering_context: &RenderingContext) -> BindGrou
             label: Some("Image Params BindGroupLayout"),
             entries: &[BindGroupLayoutEntry {
                 binding: 0,
-                visibility: ShaderStages::VERTEX,
+                visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                 ty: BindingType::Buffer {
                     ty: BufferBindingType::Uniform,
                     has_dynamic_offset: false,
@@ -151,7 +151,7 @@ pub fn create_map_view_bgl(rendering_context: &RenderingContext) -> BindGroupLay
             entries: &[
                 BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: ShaderStages::VERTEX,
+                    visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -161,7 +161,7 @@ pub fn create_map_view_bgl(rendering_context: &RenderingContext) -> BindGroupLay
                 },
                 BindGroupLayoutEntry {
                     binding: 1,
-                    visibility: ShaderStages::VERTEX,
+                    visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -171,7 +171,7 @@ pub fn create_map_view_bgl(rendering_context: &RenderingContext) -> BindGroupLay
                 },
                 BindGroupLayoutEntry {
                     binding: 2,
-                    visibility: ShaderStages::VERTEX,
+                    visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -221,7 +221,7 @@ pub fn create_shape_fill_params_bgl(rendering_context: &RenderingContext) -> Bin
             entries: &[
                 BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: ShaderStages::VERTEX,
+                    visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -231,7 +231,7 @@ pub fn create_shape_fill_params_bgl(rendering_context: &RenderingContext) -> Bin
                 },
                 BindGroupLayoutEntry {
                     binding: 1,
-                    visibility: ShaderStages::VERTEX,
+                    visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -296,7 +296,7 @@ pub fn create_shape_stroke_params_bgl(rendering_context: &RenderingContext) -> B
             entries: &[
                 BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: ShaderStages::VERTEX,
+                    visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -306,7 +306,7 @@ pub fn create_shape_stroke_params_bgl(rendering_context: &RenderingContext) -> B
                 },
                 BindGroupLayoutEntry {
                     binding: 1,
-                    visibility: ShaderStages::VERTEX,
+                    visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -316,7 +316,87 @@ pub fn create_shape_stroke_params_bgl(rendering_context: &RenderingContext) -> B
                 },
                 BindGroupLayoutEntry {
                     binding: 2,
-                    visibility: ShaderStages::VERTEX,
+                    visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        })
+}
+
+pub fn create_symbol_circle_params_bg(
+    rendering_context: &RenderingContext,
+    layout: &BindGroupLayout,
+    z: f32,
+    shape_styles: &ShapeStyles,
+) -> BindGroup {
+    let pixel_ratio = rendering_context.pixel_ratio;
+
+    let z_buffer = create_uniform_buffer_from_f32_slice(rendering_context, "Z Buffer", &[z]);
+
+    let radius = shape_styles.symbol_size * pixel_ratio as f32 / 2.0;
+    let radius_buffer =
+        create_uniform_buffer_from_f32_slice(rendering_context, "Radius Buffer", &[radius]);
+
+    let fill_color: [f32; 4] = shape_styles.fill_color.clone().into();
+    let fill_color_buffer =
+        create_uniform_buffer_from_f32_slice(rendering_context, "Fill Color Buffer", &fill_color);
+
+    rendering_context
+        .device
+        .create_bind_group(&BindGroupDescriptor {
+            label: Some("Symbol Rect Params BindGroup"),
+            layout,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: z_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: radius_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: fill_color_buffer.as_entire_binding(),
+                },
+            ],
+        })
+}
+
+pub fn create_symbol_circle_params_bgl(rendering_context: &RenderingContext) -> BindGroupLayout {
+    rendering_context
+        .device
+        .create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("Symbol Rect Params BindGroupLayout"),
+            entries: &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,

@@ -125,6 +125,16 @@ impl Shape {
             ),
         }
     }
+
+    pub fn is_points(&self) -> bool {
+        match self {
+            Shape::Geometry(geom) => match geom {
+                Geometry::Point(_) | Geometry::MultiPoint(_) => true,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
 }
 
 fn feature_from_geojson_feature(

@@ -18,7 +18,8 @@ fn vs_main(
     ) -> VertexOutput {
     var x = (vertex_coord[0] - map_center[0]) / map_res;
     var y = (vertex_coord[1] - map_center[1]) / map_res;
-    var position = view_proj * vec4<f32>(x, y, z / map_res, 1.0);
+    
+    let position = view_proj * vec4<f32>(x, y, z / map_res, 1.0);
 
     return VertexOutput(position, fill_color);
 }

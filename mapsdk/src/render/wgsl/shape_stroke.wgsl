@@ -24,8 +24,8 @@ fn vs_main(
     var y = (vertex_coord[1] - map_center[1]) / map_res;
     var hw = stroke_width / 2.0 / cos(vertex_angle / 2.0);
     var p = vec2<f32>(x, y) + vertex_norm * hw;
-
-    var position = view_proj * vec4<f32>(p[0], p[1], z / map_res, 1.0);
+    
+    let position = view_proj * vec4<f32>(p[0], p[1], z / map_res, 1.0);
 
     return VertexOutput(position, stroke_color, vertex_norm);
 }

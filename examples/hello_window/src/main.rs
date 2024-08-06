@@ -1,6 +1,6 @@
 extern crate mapsdk;
 
-use geo::{line_string, polygon, Coord, Rect};
+use geo::{line_string, point, polygon, Coord, MultiLineString, MultiPolygon, Rect};
 use mapsdk::{
     feature::{Feature, Shape},
     layer::{
@@ -89,7 +89,7 @@ impl ApplicationHandler for App {
             let feature_layer_options = FeatureLayerOptions::default();
             let mut feature_layer = FeatureLayer::new(feature_layer_options);
             feature_layer.add_feature(Feature::new(
-                "1",
+                "0",
                 Shape::Circle {
                     center: Coord { x: 0.0, y: 0.0 },
                     radius: 1000_000.0,
@@ -97,13 +97,25 @@ impl ApplicationHandler for App {
                 None,
             ));
             feature_layer.add_feature(Feature::new(
+                "1",
+                Shape::Geometry(point!(lonlat_to_wm(&Coord { x: 30.0, y: 20.0 }).unwrap()).into()),
+                None,
+            ));
+            feature_layer.add_feature(Feature::new(
                 "2",
                 Shape::Geometry(
-                    line_string![
-                        lonlat_to_wm(&Coord { x: 30.0, y: -5.0 }).unwrap(),
-                        lonlat_to_wm(&Coord { x: 35.0, y: 0.0 }).unwrap(),
-                        lonlat_to_wm(&Coord { x: 30.0, y: 5.0 }).unwrap(),
-                    ]
+                    MultiLineString::new(vec![
+                        line_string![
+                            lonlat_to_wm(&Coord { x: 30.0, y: -5.0 }).unwrap(),
+                            lonlat_to_wm(&Coord { x: 35.0, y: 0.0 }).unwrap(),
+                            lonlat_to_wm(&Coord { x: 30.0, y: 5.0 }).unwrap(),
+                        ],
+                        line_string![
+                            lonlat_to_wm(&Coord { x: 40.0, y: -5.0 }).unwrap(),
+                            lonlat_to_wm(&Coord { x: 45.0, y: 0.0 }).unwrap(),
+                            lonlat_to_wm(&Coord { x: 40.0, y: 5.0 }).unwrap(),
+                        ],
+                    ])
                     .into(),
                 ),
                 None,
@@ -111,22 +123,33 @@ impl ApplicationHandler for App {
             feature_layer.add_feature(Feature::new(
                 "3",
                 Shape::Geometry(
-                    polygon!(
-                        exterior: [
-                            lonlat_to_wm(&Coord { x: -111.0, y: 45.0 }).unwrap(),
-                            lonlat_to_wm(&Coord { x: -111.0, y: 41.0 }).unwrap(),
-                            lonlat_to_wm(&Coord { x: -104.0, y: 41.0 }).unwrap(),
-                            lonlat_to_wm(&Coord { x: -104.0, y: 45.0 }).unwrap(),
-                        ],
-                        interiors: [
-                            [
-                                lonlat_to_wm(&Coord { x: -110.0, y: 44.0 }).unwrap(),
-                                lonlat_to_wm(&Coord { x: -110.0, y: 42.0 }).unwrap(),
-                                lonlat_to_wm(&Coord { x: -105.0, y: 42.0 }).unwrap(),
-                                lonlat_to_wm(&Coord { x: -105.0, y: 44.0 }).unwrap(),
+                    MultiPolygon::new(vec![
+                        polygon!(
+                            exterior: [
+                                lonlat_to_wm(&Coord { x: -111.0, y: 45.0 }).unwrap(),
+                                lonlat_to_wm(&Coord { x: -111.0, y: 41.0 }).unwrap(),
+                                lonlat_to_wm(&Coord { x: -104.0, y: 41.0 }).unwrap(),
+                                lonlat_to_wm(&Coord { x: -104.0, y: 45.0 }).unwrap(),
                             ],
-                        ],
-                    )
+                            interiors: [
+                                [
+                                    lonlat_to_wm(&Coord { x: -110.0, y: 44.0 }).unwrap(),
+                                    lonlat_to_wm(&Coord { x: -110.0, y: 42.0 }).unwrap(),
+                                    lonlat_to_wm(&Coord { x: -105.0, y: 42.0 }).unwrap(),
+                                    lonlat_to_wm(&Coord { x: -105.0, y: 44.0 }).unwrap(),
+                                ],
+                            ],
+                        ),
+                        polygon!(
+                            exterior: [
+                                lonlat_to_wm(&Coord { x: -101.0, y: 45.0 }).unwrap(),
+                                lonlat_to_wm(&Coord { x: -101.0, y: 41.0 }).unwrap(),
+                                lonlat_to_wm(&Coord { x: -94.0, y: 41.0 }).unwrap(),
+                                lonlat_to_wm(&Coord { x: -94.0, y: 45.0 }).unwrap(),
+                            ],
+                            interiors: [],
+                        ),
+                    ])
                     .into(),
                 ),
                 None,
