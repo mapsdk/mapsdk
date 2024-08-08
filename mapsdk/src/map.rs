@@ -11,8 +11,13 @@ use geo::Coord;
 use tokio::{sync::mpsc, task::JoinHandle, time::sleep};
 
 use crate::{
-    env, event::Event, layer::Layer, map::context::MapContext, render::Renderer, tiling::Tiling,
-    utils::color::Color,
+    env,
+    event::Event,
+    layer::Layer,
+    map::context::MapContext,
+    render::Renderer,
+    tiling::Tiling,
+    utils::{color::Color, easing::ease_out_cubic},
 };
 
 pub(crate) mod context;
@@ -27,6 +32,8 @@ pub struct Map {
 
     event_handle: JoinHandle<()>,
     redraw_handle: JoinHandle<()>,
+
+    anim_handle: Option<JoinHandle<()>>,
 }
 
 impl Drop for Map {
@@ -110,6 +117,8 @@ impl Map {
 
             event_handle,
             redraw_handle,
+
+            anim_handle: None,
         }
     }
 
@@ -143,8 +152,121 @@ impl Map {
         Some(self.context.lock().ok()?.state.center.clone())
     }
 
+    /// Ease to the given view, with an animated transition.
+    pub fn ease_to(&mut self, map_view_change: &MapViewChange, duration: Duration) {
+        let frame_interval = 1000 / self.options.max_frame_rate as u128;
+
+        let ticks = duration.as_millis() / frame_interval;
+        if ticks <= 1 {
+            self.jump_to(map_view_change);
+            return;
+        }
+
+        self.cancel_anim();
+
+        self.anim_handle = Some(env::spawn({
+            let event_sender = self.event_sender.clone();
+            let context = self.context.clone();
+
+            let from_center = self.center();
+            let from_zoom_res = self.zoom_res();
+            let from_pitch = self.pitch();
+            let from_yaw = self.yaw();
+
+            let to_center = map_view_change.center.clone();
+            let to_zoom_res = map_view_change.zoom_res;
+            let to_pitch = map_view_change.pitch;
+            let to_yaw = map_view_change.yaw;
+
+            async move {
+                let now = Instant::now();
+
+                for i in 0..ticks {
+                    if now.elapsed().as_millis() >= frame_interval * i {
+                        continue;
+                    }
+
+                    let x = ease_out_cubic(i as f64 / ticks as f64);
+
+                    {
+                        if let Ok(mut context) = context.lock() {
+                            if let (Some(from_center), Some(to_center)) = (from_center, to_center) {
+                                let center = from_center * (1.0 - x) + to_center * x;
+
+                                context.set_center(center);
+                            }
+
+                            if let Some(to_zoom_res) = to_zoom_res {
+                                let zoom_res = from_zoom_res * (1.0 - x) + to_zoom_res * x;
+
+                                context.set_zoom_res(zoom_res, false);
+                            }
+
+                            if to_pitch.is_some() || to_yaw.is_some() {
+                                let to_pitch = to_pitch.unwrap_or(from_pitch);
+                                let to_yaw = to_yaw.unwrap_or(from_yaw);
+
+                                let pitch = from_pitch * (1.0 - x) + to_pitch * x;
+                                let yaw = from_yaw * (1.0 - x) + to_yaw * x;
+
+                                context.set_pitch_yaw(pitch, yaw);
+                            }
+                        }
+                    }
+
+                    let _ = event_sender.send(Event::MapRequestRedraw);
+
+                    sleep(Duration::from_millis(frame_interval as u64)).await;
+                }
+
+                {
+                    if let Ok(mut context) = context.lock() {
+                        if let Some(center) = to_center {
+                            context.set_center(center);
+                        }
+
+                        if let Some(zoom_res) = to_zoom_res {
+                            context.set_zoom_res(zoom_res, true);
+                        }
+
+                        if to_pitch.is_some() || to_yaw.is_some() {
+                            let pitch = to_pitch.unwrap_or(context.state.pitch);
+                            let yaw = to_yaw.unwrap_or(context.state.yaw);
+                            context.set_pitch_yaw(pitch, yaw);
+                        }
+                    }
+                }
+
+                let _ = event_sender.send(Event::MapRequestRedraw);
+            }
+        }));
+    }
+
     pub fn height(&self) -> Option<u32> {
         Some(self.context.lock().ok()?.renderer.as_ref()?.height())
+    }
+
+    /// Jump to the given view, without an animated transition.
+    pub fn jump_to(&mut self, map_view_change: &MapViewChange) {
+        {
+            if let Ok(mut context) = self.context.lock() {
+                if let Some(center) = map_view_change.center {
+                    context.set_center(center);
+                }
+
+                if let Some(zoom_res) = map_view_change.zoom_res {
+                    context.set_zoom_res(zoom_res, true);
+                }
+
+                if map_view_change.pitch.is_some() || map_view_change.yaw.is_some() {
+                    let pitch = map_view_change.pitch.unwrap_or(context.state.pitch);
+                    let yaw = map_view_change.yaw.unwrap_or(context.state.yaw);
+                    context.set_pitch_yaw(pitch, yaw);
+                }
+            }
+        }
+
+        self.request_redraw();
     }
 
     pub fn options(&self) -> &MapOptions {
@@ -196,6 +318,8 @@ impl Map {
     }
 
     pub fn set_center(&mut self, center: Coord) {
+        self.cancel_anim();
+
         {
             if let Ok(mut context) = self.context.lock() {
                 context.set_center(center);
@@ -206,6 +330,8 @@ impl Map {
     }
 
     pub fn set_pitch_yaw(&mut self, pitch: f64, yaw: f64) {
+        self.cancel_anim();
+
         {
             if let Ok(mut context) = self.context.lock() {
                 context.set_pitch_yaw(pitch.clamp(0.0, self.options.pitch_max), yaw);
@@ -246,6 +372,8 @@ impl Map {
     }
 
     pub fn zoom_around(&mut self, coord: &Coord, scalar: f64) {
+        self.cancel_anim();
+
         {
             if let Ok(mut context) = self.context.lock() {
                 context.zoom_around(coord, scalar);
@@ -253,6 +381,20 @@ impl Map {
         }
 
         self.request_redraw();
+    }
+
+    pub fn zoom_res(&self) -> f64 {
+        self.context
+            .lock()
+            .ok()
+            .and_then(|context| Some(context.state.zoom_res))
+            .unwrap_or(0.0)
+    }
+
+    fn cancel_anim(&mut self) {
+        if let Some(anim_handle) = self.anim_handle.take() {
+            anim_handle.abort();
+        }
     }
 
     fn request_redraw(&self) {
@@ -336,6 +478,36 @@ impl MapOptions {
 
     pub fn with_zoom_min(mut self, v: usize) -> Self {
         self.zoom_min = v;
+        self
+    }
+}
+
+#[derive(Default)]
+pub struct MapViewChange {
+    pub center: Option<Coord>,
+    pub zoom_res: Option<f64>,
+    pub pitch: Option<f64>,
+    pub yaw: Option<f64>,
+}
+
+impl MapViewChange {
+    pub fn with_center(mut self, v: Coord) -> Self {
+        self.center = Some(v);
+        self
+    }
+
+    pub fn with_zoom_res(mut self, v: f64) -> Self {
+        self.zoom_res = Some(v);
+        self
+    }
+
+    pub fn with_pitch(mut self, v: f64) -> Self {
+        self.pitch = Some(v);
+        self
+    }
+
+    pub fn with_yaw(mut self, v: f64) -> Self {
+        self.yaw = Some(v);
         self
     }
 }

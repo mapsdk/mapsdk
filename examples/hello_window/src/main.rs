@@ -1,5 +1,7 @@
 extern crate mapsdk;
 
+use std::time::Duration;
+
 use geo::{line_string, point, polygon, Coord, MultiLineString, MultiPolygon, Rect};
 use mapsdk::{
     feature::{Feature, Shape},
@@ -8,21 +10,24 @@ use mapsdk::{
         image_layer::{ImageLayer, ImageLayerOptions},
         image_tiled_layer::{ImageTiledLayer, ImageTiledLayerOptions},
     },
-    map::{Map, MapOptions},
+    map::{Map, MapOptions, MapViewChange},
     render::{Renderer, RendererOptions, RendererType},
     utils::{color::Color, proj::lonlat_to_wm},
 };
+use rand::Rng;
 use winit::{
     application::ApplicationHandler,
     dpi::LogicalSize,
-    event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent},
+    event::*,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowId},
 };
 
 struct App {
     map: Map,
     motion: Motion,
+    rng: rand::rngs::ThreadRng,
 }
 
 #[derive(Default)]
@@ -267,6 +272,51 @@ impl ApplicationHandler for App {
                     }
                 }
             }
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        state,
+                        repeat,
+                        physical_key,
+                        ..
+                    },
+                ..
+            } => {
+                if state == ElementState::Pressed && !repeat {
+                    match physical_key {
+                        PhysicalKey::Code(KeyCode::KeyE) => {
+                            self.map.ease_to(
+                                &MapViewChange::default()
+                                    .with_center(
+                                        lonlat_to_wm(&Coord {
+                                            x: -180.0 + 360.0 * self.rng.gen::<f64>(),
+                                            y: -60.0 + 120.0 * self.rng.gen::<f64>(),
+                                        })
+                                        .unwrap(),
+                                    )
+                                    .with_pitch(60.0 * self.rng.gen::<f64>())
+                                    .with_yaw(-60.0 + 120.0 * self.rng.gen::<f64>()),
+                                Duration::from_millis(2000),
+                            );
+                        }
+                        PhysicalKey::Code(KeyCode::KeyJ) => {
+                            self.map.jump_to(
+                                &MapViewChange::default()
+                                    .with_center(
+                                        lonlat_to_wm(&Coord {
+                                            x: -180.0 + 360.0 * self.rng.gen::<f64>(),
+                                            y: -60.0 + 120.0 * self.rng.gen::<f64>(),
+                                        })
+                                        .unwrap(),
+                                    )
+                                    .with_pitch(60.0 * self.rng.gen::<f64>())
+                                    .with_yaw(-60.0 + 120.0 * self.rng.gen::<f64>()),
+                            );
+                        }
+                        _ => (),
+                    }
+                }
+            }
             _ => (),
         }
     }
@@ -283,6 +333,7 @@ pub fn main() {
                 .with_background_color(Color::from_rgb(180, 180, 180)),
         ),
         motion: Motion::default(),
+        rng: rand::thread_rng(),
     };
     let _ = event_loop.run_app(&mut app);
 }

@@ -94,6 +94,26 @@ impl MapContext {
         self.state.view_seq += 1;
     }
 
+    pub fn set_zoom_res(&mut self, zoom_res: f64, update_zoom: bool) {
+        let zoom_res_max = self
+            .map_options
+            .tiling
+            .get_resolution(self.map_options.zoom_min);
+        let zoom_res_min = self
+            .map_options
+            .tiling
+            .get_resolution(self.map_options.zoom_max);
+
+        let new_zoom_res = zoom_res.clamp(zoom_res_min, zoom_res_max);
+
+        self.state.zoom_res = new_zoom_res;
+        if update_zoom {
+            self.state.zoom = self.map_options.tiling.get_closest_lower_zoom(new_zoom_res);
+        }
+
+        self.state.view_seq += 1;
+    }
+
     pub fn to_map(&self, screen_coord: &Coord) -> Option<Coord> {
         let screen_center_x = self.renderer.as_ref()?.width() as f64 / 2.0;
         let screen_center_y = self.renderer.as_ref()?.height() as f64 / 2.0;
