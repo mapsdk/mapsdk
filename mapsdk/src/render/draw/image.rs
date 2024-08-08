@@ -47,8 +47,8 @@ impl ImageDrawable {
 
         let vertices = [
             [bbox.min().x as f32, bbox.max().y as f32],
-            [bbox.min().x as f32, bbox.min().y as f32],
             [bbox.max().x as f32, bbox.max().y as f32],
+            [bbox.min().x as f32, bbox.min().y as f32],
             [bbox.max().x as f32, bbox.min().y as f32],
         ];
         let vertex_buffer = create_vertex_buffer_from_vec2_f32_slice(
@@ -57,7 +57,7 @@ impl ImageDrawable {
             &vertices,
         );
 
-        let indices: [u16; 6] = [0, 2, 1, 1, 2, 3];
+        let indices: [u16; 4] = [0, 1, 2, 3];
         let index_buffer =
             create_index_buffer_from_u16_slice(rendering_context, "Image IndexBuffer", &indices);
 
@@ -101,7 +101,7 @@ impl Drawable for ImageDrawable {
         render_pass.set_bind_group(2, &image_params_bg, &[]);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint16);
-        render_pass.draw_indexed(0..6, 0, 0..1);
+        render_pass.draw_indexed(0..4, 0, 0..1);
     }
 }
 

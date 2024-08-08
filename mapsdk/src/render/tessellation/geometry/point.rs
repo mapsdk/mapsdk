@@ -8,7 +8,7 @@ pub fn tessellate_point(point: &geo::Point) -> Tessellations {
 
         let fill_vertices: Vec<[f32; 2]> =
             vec![vertex, vertex.clone(), vertex.clone(), vertex.clone()];
-        let fill_indices = vec![0, 2, 1, 1, 2, 3];
+        let fill_indices = vec![0, 1, 2, 3];
 
         output.fills.push(FillVertexIndex {
             vertices: fill_vertices,

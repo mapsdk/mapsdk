@@ -41,7 +41,7 @@ impl VertexIndexBuffer {
         rendering_context: &RenderingContext,
         stroke_vertex_index: &StrokeVertexIndex,
     ) -> Self {
-        let vertex_buffer = create_vertex_buffer_from_vec5_f32_slice(
+        let vertex_buffer = create_vertex_buffer_from_vec8_f32_slice(
             rendering_context,
             "Stroke VertexBuffer",
             &stroke_vertex_index.vertices,
@@ -131,10 +131,10 @@ pub fn create_vertex_buffer_from_vec4_f32_slice(
         })
 }
 
-pub fn create_vertex_buffer_from_vec5_f32_slice(
+pub fn create_vertex_buffer_from_vec8_f32_slice(
     rendering_context: &RenderingContext,
     label: &str,
-    slice: &[[f32; 5]],
+    slice: &[[f32; 8]],
 ) -> Buffer {
     rendering_context
         .device

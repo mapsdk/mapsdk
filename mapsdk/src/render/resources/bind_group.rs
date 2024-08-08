@@ -253,10 +253,10 @@ pub fn create_shape_stroke_params_bg(
 
     let z_buffer = create_uniform_buffer_from_f32_slice(rendering_context, "Z Buffer", &[z]);
 
-    let stroke_width_buffer = create_uniform_buffer_from_f32_slice(
+    let stroke_half_width_buffer = create_uniform_buffer_from_f32_slice(
         rendering_context,
-        "Stroke Width Buffer",
-        &[shape_styles.stroke_width * pixel_ratio as f32],
+        "Stroke Half Width Buffer",
+        &[0.5 * shape_styles.stroke_width * pixel_ratio as f32],
     );
 
     let stroke_color: [f32; 4] = shape_styles.stroke_color.clone().into();
@@ -278,7 +278,7 @@ pub fn create_shape_stroke_params_bg(
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: stroke_width_buffer.as_entire_binding(),
+                    resource: stroke_half_width_buffer.as_entire_binding(),
                 },
                 BindGroupEntry {
                     binding: 2,

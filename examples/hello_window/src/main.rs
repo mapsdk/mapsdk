@@ -98,7 +98,7 @@ impl ApplicationHandler for App {
             ));
             feature_layer.add_feature(Feature::new(
                 "1",
-                Shape::Geometry(point!(lonlat_to_wm(&Coord { x: 30.0, y: 20.0 }).unwrap()).into()),
+                Shape::Geometry(point!(lonlat_to_wm(&Coord { x: 55.0, y: 0.0 }).unwrap()).into()),
                 None,
             ));
             feature_layer.add_feature(Feature::new(
@@ -106,14 +106,18 @@ impl ApplicationHandler for App {
                 Shape::Geometry(
                     MultiLineString::new(vec![
                         line_string![
-                            lonlat_to_wm(&Coord { x: 30.0, y: -5.0 }).unwrap(),
-                            lonlat_to_wm(&Coord { x: 35.0, y: 0.0 }).unwrap(),
-                            lonlat_to_wm(&Coord { x: 30.0, y: 5.0 }).unwrap(),
+                            lonlat_to_wm(&Coord { x: 20.0, y: -5.0 }).unwrap(),
+                            lonlat_to_wm(&Coord { x: 20.0, y: 5.0 }).unwrap(),
                         ],
                         line_string![
-                            lonlat_to_wm(&Coord { x: 40.0, y: -5.0 }).unwrap(),
-                            lonlat_to_wm(&Coord { x: 45.0, y: 0.0 }).unwrap(),
-                            lonlat_to_wm(&Coord { x: 40.0, y: 5.0 }).unwrap(),
+                            lonlat_to_wm(&Coord { x: 35.0, y: -5.0 }).unwrap(),
+                            lonlat_to_wm(&Coord { x: 32.0, y: 0.0 }).unwrap(),
+                            lonlat_to_wm(&Coord { x: 35.0, y: 5.0 }).unwrap(),
+                        ],
+                        line_string![
+                            lonlat_to_wm(&Coord { x: 45.0, y: -5.0 }).unwrap(),
+                            lonlat_to_wm(&Coord { x: 48.0, y: 0.0 }).unwrap(),
+                            lonlat_to_wm(&Coord { x: 45.0, y: 5.0 }).unwrap(),
                         ],
                     ])
                     .into(),
@@ -126,26 +130,26 @@ impl ApplicationHandler for App {
                     MultiPolygon::new(vec![
                         polygon!(
                             exterior: [
-                                lonlat_to_wm(&Coord { x: -111.0, y: 45.0 }).unwrap(),
-                                lonlat_to_wm(&Coord { x: -111.0, y: 41.0 }).unwrap(),
-                                lonlat_to_wm(&Coord { x: -104.0, y: 41.0 }).unwrap(),
-                                lonlat_to_wm(&Coord { x: -104.0, y: 45.0 }).unwrap(),
+                                lonlat_to_wm(&Coord { x: -80.0, y: 6.0 }).unwrap(),
+                                lonlat_to_wm(&Coord { x: -80.0, y: -6.0 }).unwrap(),
+                                lonlat_to_wm(&Coord { x: -70.0, y: -6.0 }).unwrap(),
+                                lonlat_to_wm(&Coord { x: -70.0, y: 6.0 }).unwrap(),
                             ],
                             interiors: [
                                 [
-                                    lonlat_to_wm(&Coord { x: -110.0, y: 44.0 }).unwrap(),
-                                    lonlat_to_wm(&Coord { x: -110.0, y: 42.0 }).unwrap(),
-                                    lonlat_to_wm(&Coord { x: -105.0, y: 42.0 }).unwrap(),
-                                    lonlat_to_wm(&Coord { x: -105.0, y: 44.0 }).unwrap(),
+                                    lonlat_to_wm(&Coord { x: -78.0, y: 4.0 }).unwrap(),
+                                    lonlat_to_wm(&Coord { x: -78.0, y: -4.0 }).unwrap(),
+                                    lonlat_to_wm(&Coord { x: -72.0, y: -4.0 }).unwrap(),
+                                    lonlat_to_wm(&Coord { x: -72.0, y: 4.0 }).unwrap(),
                                 ],
                             ],
                         ),
                         polygon!(
                             exterior: [
-                                lonlat_to_wm(&Coord { x: -101.0, y: 45.0 }).unwrap(),
-                                lonlat_to_wm(&Coord { x: -101.0, y: 41.0 }).unwrap(),
-                                lonlat_to_wm(&Coord { x: -94.0, y: 41.0 }).unwrap(),
-                                lonlat_to_wm(&Coord { x: -94.0, y: 45.0 }).unwrap(),
+                                lonlat_to_wm(&Coord { x: -60.0, y: 6.0 }).unwrap(),
+                                lonlat_to_wm(&Coord { x: -60.0, y: -6.0 }).unwrap(),
+                                lonlat_to_wm(&Coord { x: -50.0, y: -6.0 }).unwrap(),
+                                lonlat_to_wm(&Coord { x: -50.0, y: 6.0 }).unwrap(),
                             ],
                             interiors: [],
                         ),
@@ -198,9 +202,16 @@ impl ApplicationHandler for App {
                         Some(drag_start_cursor_position) => {
                             if let Some(drag_start_map_center) = self.motion.drag_start_map_center {
                                 let map_res = self.map.resolution().unwrap();
+                                let map_yaw = self.map.yaw();
                                 let dx = (position.x - drag_start_cursor_position.x) * map_res;
                                 let dy = (drag_start_cursor_position.y - position.y) * map_res;
-                                let new_center = drag_start_map_center - Coord { x: dx, y: dy };
+                                let cos_map_yaw = map_yaw.to_radians().cos();
+                                let sin_map_yaw = map_yaw.to_radians().sin();
+                                let new_center = drag_start_map_center
+                                    - Coord {
+                                        x: dx * cos_map_yaw - dy * sin_map_yaw,
+                                        y: dy * cos_map_yaw + dx * sin_map_yaw,
+                                    };
                                 self.map.set_center(new_center);
                             }
                         }

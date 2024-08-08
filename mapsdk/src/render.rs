@@ -69,16 +69,16 @@ impl Renderer {
                     )
                     .await
                     .expect("Failed to find device");
-                if let Some(mut config) = surface.get_default_config(&adapter, width, height) {
-                    if surface
-                        .get_capabilities(&adapter)
-                        .alpha_modes
-                        .contains(&CompositeAlphaMode::PreMultiplied)
-                    {
-                        config.alpha_mode = CompositeAlphaMode::PreMultiplied;
-                    }
+                if let Some(config) = surface.get_default_config(&adapter, width, height) {
                     surface.configure(&device, &config);
                 }
+
+                let surface_capabilities = surface.get_capabilities(&adapter);
+                let color_target_state = ColorTargetState {
+                    format: surface_capabilities.formats[0],
+                    blend: Some(BlendState::ALPHA_BLENDING),
+                    write_mask: ColorWrites::ALL,
+                };
 
                 let rendering_context = RenderingContext {
                     pixel_ratio,
@@ -86,6 +86,7 @@ impl Renderer {
                     adapter,
                     device,
                     queue,
+                    color_target_state,
                 };
 
                 let depth_texture = create_depth_texture(&rendering_context, width, height);
@@ -327,4 +328,5 @@ pub(crate) struct RenderingContext {
     adapter: Adapter,
     device: Device,
     queue: Queue,
+    color_target_state: ColorTargetState,
 }

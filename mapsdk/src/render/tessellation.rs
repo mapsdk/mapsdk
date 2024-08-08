@@ -21,6 +21,6 @@ pub struct FillVertexIndex {
 }
 
 pub struct StrokeVertexIndex {
-    pub vertices: Vec<[f32; 5]>, // x, y, norm_x, norm_y, angle
+    pub vertices: Vec<[f32; 8]>,
     pub indices: Vec<u16>,
 }

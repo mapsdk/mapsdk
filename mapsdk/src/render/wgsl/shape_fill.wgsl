@@ -16,10 +16,8 @@ struct VertexOutput {
 fn vs_main(
     @location(0) vertex_coord: vec2<f32>
     ) -> VertexOutput {
-    var x = (vertex_coord[0] - map_center[0]) / map_res;
-    var y = (vertex_coord[1] - map_center[1]) / map_res;
-    
-    let position = view_proj * vec4<f32>(x, y, z / map_res, 1.0);
+    var p = (vertex_coord - map_center) / map_res;
+    let position = view_proj * vec4<f32>(p.xy, z / map_res, 1.0);
 
     return VertexOutput(position, fill_color);
 }

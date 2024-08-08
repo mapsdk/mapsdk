@@ -6,83 +6,147 @@ pub fn tessellate_line_string(line_string: &geo::LineString) -> Tessellations {
     let mut output: Tessellations = Tessellations::new();
 
     {
-        let vertices: Vec<[f32; 2]> = line_string
+        let mut stroke_vertices: Vec<[f32; 8]> = Vec::new();
+        let mut stroke_indices: Vec<u16> = Vec::new();
+        let mut index_offset: u16 = 0;
+
+        let vertices: Vec<_> = line_string
             .coords()
-            .map(|v| [v.x as f32, v.y as f32])
+            .map(|v| Vec2::new(v.x as f32, v.y as f32))
             .collect();
 
-        let mut stroke_vertices: Vec<[f32; 5]> = Vec::new();
-        let mut stroke_indices: Vec<u16> = Vec::new();
+        for i in 0..vertices.len() - 1 {
+            let seg_dir = (vertices[i + 1] - vertices[i]).normalize_or_zero();
+            let seg_norm = Vec2::new(-seg_dir.y, seg_dir.x);
 
-        for i in 0..vertices.len() {
-            let vertex = vertices[i];
-
-            let vec_prev: Vec2;
-            let vec_next: Vec2;
-
-            if line_string.is_closed() && (i == 0 || i == vertices.len() - 1) {
-                let vertex_prev = vertices[vertices.len() - 2];
-                let vertex_next = vertices[1];
-
-                vec_prev = Vec2 {
-                    x: vertex[0] - vertex_prev[0],
-                    y: vertex[1] - vertex_prev[1],
-                }
-                .normalize_or_zero();
-                vec_next = Vec2 {
-                    x: vertex_next[0] - vertex[0],
-                    y: vertex_next[1] - vertex[1],
-                }
-                .normalize_or_zero();
-            } else {
-                if i == 0 {
-                    vec_prev = Vec2 {
-                        x: vertices[1][0] - vertex[0],
-                        y: vertices[1][1] - vertex[1],
-                    }
-                    .normalize_or_zero();
-                    vec_next = vec_prev.clone();
-                } else if i == vertices.len() - 1 {
-                    vec_prev = Vec2 {
-                        x: vertex[0] - vertices[i - 1][0],
-                        y: vertex[1] - vertices[i - 1][1],
-                    }
-                    .normalize_or_zero();
-                    vec_next = vec_prev.clone();
+            let prev_seg_dir = if i == 0 {
+                if line_string.is_closed() {
+                    (vertices[vertices.len() - 1] - vertices[vertices.len() - 2])
+                        .normalize_or_zero()
                 } else {
-                    let vertex_prev = vertices[i - 1];
-                    let vertex_next = vertices[i + 1];
+                    seg_dir
+                }
+            } else {
+                (vertices[i] - vertices[i - 1]).normalize_or_zero()
+            };
+            let seg_start_join_angle = seg_dir.angle_to(prev_seg_dir);
 
-                    vec_prev = Vec2 {
-                        x: vertex[0] - vertex_prev[0],
-                        y: vertex[1] - vertex_prev[1],
-                    }
-                    .normalize_or_zero();
-                    vec_next = Vec2 {
-                        x: vertex_next[0] - vertex[0],
-                        y: vertex_next[1] - vertex[1],
-                    }
-                    .normalize_or_zero();
-                };
+            let next_seg_dir = if i == vertices.len() - 2 {
+                if line_string.is_closed() {
+                    (vertices[1] - vertices[0]).normalize_or_zero()
+                } else {
+                    seg_dir
+                }
+            } else {
+                (vertices[i + 2] - vertices[i + 1]).normalize_or_zero()
+            };
+            let seg_end_join_angle = next_seg_dir.angle_to(seg_dir);
+
+            let seg_start_vertex = vertices[i];
+            let seg_end_vertex = vertices[i + 1];
+
+            // Line start join
+            if i > 0 || (i == 0 && line_string.is_closed()) {
+                if seg_start_join_angle != 0.0 {
+                    let join_vertex = vertices[i];
+                    let join_dir = (prev_seg_dir + seg_dir).normalize_or_zero();
+                    let join_norm =
+                        Vec2::new(-join_dir.y, join_dir.x) * seg_start_join_angle.signum();
+                    let join_norm_offset = join_norm / (seg_start_join_angle / 2.0).cos().abs();
+                    let edge_norm = seg_norm * seg_start_join_angle.signum();
+
+                    stroke_vertices.push([
+                        join_vertex.x,
+                        join_vertex.y,
+                        0.0,
+                        0.0,
+                        join_norm_offset.x,
+                        join_norm_offset.y,
+                        edge_norm.x,
+                        edge_norm.y,
+                    ]);
+
+                    stroke_indices.extend_from_slice(&[
+                        index_offset,
+                        index_offset + 1,
+                        index_offset + 2,
+                    ]);
+
+                    index_offset += 1;
+                }
             }
 
-            let vec_d = (vec_next + vec_prev).normalize_or_zero();
-            let vec_n = [-vec_d.y, vec_d.x];
-            let angle = vec_next.angle_to(vec_prev);
+            // Straight line segment
+            {
+                for j in [1.0, -1.0] {
+                    let offset_scale = (seg_start_join_angle / 2.0).tan().abs();
+                    stroke_vertices.push([
+                        seg_start_vertex.x,
+                        seg_start_vertex.y,
+                        seg_dir.x * offset_scale,
+                        seg_dir.y * offset_scale,
+                        j * seg_norm.x,
+                        j * seg_norm.y,
+                        j * seg_norm.x,
+                        j * seg_norm.y,
+                    ]);
+                }
 
-            stroke_vertices.push([vertex[0], vertex[1], vec_n[0], vec_n[1], angle]);
-            stroke_vertices.push([vertex[0], vertex[1], -vec_n[0], -vec_n[1], -angle]);
+                for j in [1.0, -1.0] {
+                    let offset_scale = (seg_end_join_angle / 2.0).tan().abs();
+                    stroke_vertices.push([
+                        seg_end_vertex.x,
+                        seg_end_vertex.y,
+                        -seg_dir.x * offset_scale,
+                        -seg_dir.y * offset_scale,
+                        j * seg_norm.x,
+                        j * seg_norm.y,
+                        j * seg_norm.x,
+                        j * seg_norm.y,
+                    ]);
+                }
 
-            if i > 0 {
-                let offset = 2 * i as u16 - 2;
                 stroke_indices.extend_from_slice(&[
-                    offset,
-                    offset + 2,
-                    offset + 1,
-                    offset + 1,
-                    offset + 2,
-                    offset + 3,
+                    index_offset,
+                    index_offset + 1,
+                    index_offset + 2,
+                    index_offset + 2,
+                    index_offset + 1,
+                    index_offset + 3,
                 ]);
+
+                index_offset += 4;
+            }
+
+            // Line end join
+            if i < vertices.len() - 2 || (i == vertices.len() - 2 && line_string.is_closed()) {
+                if seg_end_join_angle != 0.0 {
+                    let join_vertex = vertices[i + 1];
+                    let join_dir = (seg_dir + next_seg_dir).normalize_or_zero();
+                    let join_norm =
+                        Vec2::new(-join_dir.y, join_dir.x) * seg_end_join_angle.signum();
+                    let join_norm_offset = join_norm / (seg_end_join_angle / 2.0).cos().abs();
+                    let edge_norm = seg_norm * seg_end_join_angle.signum();
+
+                    stroke_vertices.push([
+                        join_vertex.x,
+                        join_vertex.y,
+                        0.0,
+                        0.0,
+                        join_norm_offset.x,
+                        join_norm_offset.y,
+                        edge_norm.x,
+                        edge_norm.y,
+                    ]);
+
+                    stroke_indices.extend_from_slice(&[
+                        index_offset - 2,
+                        index_offset - 1,
+                        index_offset,
+                    ]);
+
+                    index_offset += 1;
+                }
             }
         }
 

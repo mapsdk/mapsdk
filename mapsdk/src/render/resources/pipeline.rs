@@ -13,9 +13,8 @@ use crate::render::{
 
 pub fn create_image_pipeline(rendering_context: &RenderingContext) -> RenderPipeline {
     let RenderingContext {
-        surface,
-        adapter,
         device,
+        color_target_state,
         ..
     } = &rendering_context;
 
@@ -40,9 +39,6 @@ pub fn create_image_pipeline(rendering_context: &RenderingContext) -> RenderPipe
         attributes: &wgpu::vertex_attr_array![0 => Float32x2],
     };
 
-    let swapchain_capabilities = surface.get_capabilities(&adapter);
-    let swapchain_format = swapchain_capabilities.formats[0];
-
     device.create_render_pipeline(&RenderPipelineDescriptor {
         label: Some("Image Pipeline"),
         layout: Some(&pipeline_layout),
@@ -56,11 +52,10 @@ pub fn create_image_pipeline(rendering_context: &RenderingContext) -> RenderPipe
             module: &shader,
             entry_point: "fs_main",
             compilation_options: Default::default(),
-            targets: &[Some(swapchain_format.into())],
+            targets: &[Some(color_target_state.clone())],
         }),
         primitive: PrimitiveState {
-            front_face: FrontFace::Cw,
-            cull_mode: Some(Face::Back),
+            topology: PrimitiveTopology::TriangleStrip,
             ..Default::default()
         },
         // depth_stencil: Some(DepthStencilState {
@@ -82,9 +77,8 @@ pub fn create_image_pipeline(rendering_context: &RenderingContext) -> RenderPipe
 
 pub fn create_shape_fill_pipeline(rendering_context: &RenderingContext) -> RenderPipeline {
     let RenderingContext {
-        surface,
-        adapter,
         device,
+        color_target_state,
         ..
     } = &rendering_context;
 
@@ -108,9 +102,6 @@ pub fn create_shape_fill_pipeline(rendering_context: &RenderingContext) -> Rende
         attributes: &wgpu::vertex_attr_array![0 => Float32x2],
     };
 
-    let swapchain_capabilities = surface.get_capabilities(&adapter);
-    let swapchain_format = swapchain_capabilities.formats[0];
-
     device.create_render_pipeline(&RenderPipelineDescriptor {
         label: Some("Shape Fill Pipeline"),
         layout: Some(&pipeline_layout),
@@ -124,13 +115,9 @@ pub fn create_shape_fill_pipeline(rendering_context: &RenderingContext) -> Rende
             module: &shader,
             entry_point: "fs_main",
             compilation_options: Default::default(),
-            targets: &[Some(swapchain_format.into())],
+            targets: &[Some(color_target_state.clone())],
         }),
-        primitive: PrimitiveState {
-            front_face: FrontFace::Cw,
-            cull_mode: Some(Face::Back),
-            ..Default::default()
-        },
+        primitive: PrimitiveState::default(),
         // depth_stencil: Some(DepthStencilState {
         //     format: TextureFormat::Depth32Float,
         //     depth_write_enabled: true,
@@ -150,9 +137,8 @@ pub fn create_shape_fill_pipeline(rendering_context: &RenderingContext) -> Rende
 
 pub fn create_shape_stroke_pipeline(rendering_context: &RenderingContext) -> RenderPipeline {
     let RenderingContext {
-        surface,
-        adapter,
         device,
+        color_target_state,
         ..
     } = &rendering_context;
 
@@ -171,13 +157,10 @@ pub fn create_shape_stroke_pipeline(rendering_context: &RenderingContext) -> Ren
     });
 
     let vertex_buffer_layout = VertexBufferLayout {
-        array_stride: std::mem::size_of::<[f32; 5]>() as BufferAddress,
+        array_stride: std::mem::size_of::<[f32; 8]>() as BufferAddress,
         step_mode: VertexStepMode::Vertex,
-        attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Float32],
+        attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Float32x2, 3 => Float32x2],
     };
-
-    let swapchain_capabilities = surface.get_capabilities(&adapter);
-    let swapchain_format = swapchain_capabilities.formats[0];
 
     device.create_render_pipeline(&RenderPipelineDescriptor {
         label: Some("Shape Stroke Pipeline"),
@@ -192,13 +175,9 @@ pub fn create_shape_stroke_pipeline(rendering_context: &RenderingContext) -> Ren
             module: &shader,
             entry_point: "fs_main",
             compilation_options: Default::default(),
-            targets: &[Some(swapchain_format.into())],
+            targets: &[Some(color_target_state.clone())],
         }),
-        primitive: PrimitiveState {
-            front_face: FrontFace::Cw,
-            cull_mode: Some(Face::Back),
-            ..Default::default()
-        },
+        primitive: PrimitiveState::default(),
         // depth_stencil: Some(DepthStencilState {
         //     format: TextureFormat::Depth32Float,
         //     depth_write_enabled: true,
@@ -218,9 +197,8 @@ pub fn create_shape_stroke_pipeline(rendering_context: &RenderingContext) -> Ren
 
 pub fn create_symbol_circle_pipeline(rendering_context: &RenderingContext) -> RenderPipeline {
     let RenderingContext {
-        surface,
-        adapter,
         device,
+        color_target_state,
         ..
     } = &rendering_context;
 
@@ -244,9 +222,6 @@ pub fn create_symbol_circle_pipeline(rendering_context: &RenderingContext) -> Re
         attributes: &wgpu::vertex_attr_array![0 => Float32x2],
     };
 
-    let swapchain_capabilities = surface.get_capabilities(&adapter);
-    let swapchain_format = swapchain_capabilities.formats[0];
-
     device.create_render_pipeline(&RenderPipelineDescriptor {
         label: Some("Symbol Circle Pipeline"),
         layout: Some(&pipeline_layout),
@@ -260,11 +235,10 @@ pub fn create_symbol_circle_pipeline(rendering_context: &RenderingContext) -> Re
             module: &shader,
             entry_point: "fs_main",
             compilation_options: Default::default(),
-            targets: &[Some(swapchain_format.into())],
+            targets: &[Some(color_target_state.clone())],
         }),
         primitive: PrimitiveState {
-            front_face: FrontFace::Cw,
-            cull_mode: Some(Face::Back),
+            topology: PrimitiveTopology::TriangleStrip,
             ..Default::default()
         },
         // depth_stencil: Some(DepthStencilState {
