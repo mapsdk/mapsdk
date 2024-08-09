@@ -11,13 +11,8 @@ use geo::Coord;
 use tokio::{sync::mpsc, task::JoinHandle, time::sleep};
 
 use crate::{
-    env,
-    event::Event,
-    layer::Layer,
-    map::context::MapContext,
-    render::Renderer,
-    tiling::Tiling,
-    utils::{color::Color, easing::ease_out_cubic},
+    env, event::Event, layer::Layer, map::context::MapContext, render::Renderer, tiling::Tiling,
+    utils::color::Color,
 };
 
 pub(crate) mod context;
@@ -154,6 +149,16 @@ impl Map {
 
     /// Ease to the given view, with an animated transition.
     pub fn ease_to(&mut self, map_view_change: &MapViewChange, duration: Duration) {
+        self.fly_to(map_view_change, duration, 0);
+    }
+
+    /// Fly up and down to the given view, with an animated transition.
+    pub fn fly_to(
+        &mut self,
+        map_view_change: &MapViewChange,
+        duration: Duration,
+        zoom_factor: u32,
+    ) {
         let frame_interval = 1000 / self.options.max_frame_rate as u128;
 
         let ticks = duration.as_millis() / frame_interval;
@@ -178,7 +183,13 @@ impl Map {
             let to_pitch = map_view_change.pitch;
             let to_yaw = map_view_change.yaw;
 
+            let zoom_up = 2.0_f64.powi(zoom_factor as i32) - 1.0;
+
             async move {
+                if let Ok(mut context) = context.lock() {
+                    context.animating = true;
+                }
+
                 let now = Instant::now();
 
                 for i in 0..ticks {
@@ -186,7 +197,9 @@ impl Map {
                         continue;
                     }
 
-                    let x = ease_out_cubic(i as f64 / ticks as f64);
+                    let t = (i as f64 / ticks as f64).clamp(0.0, 1.0);
+                    let x = 1.0 - (1.0 - t).powi(3); // ease
+                    let y = 1.0 - (0.5 - x).abs() * 2.0; // fly
 
                     {
                         if let Ok(mut context) = context.lock() {
@@ -196,8 +209,10 @@ impl Map {
                                 context.set_center(center);
                             }
 
-                            if let Some(to_zoom_res) = to_zoom_res {
-                                let zoom_res = from_zoom_res * (1.0 - x) + to_zoom_res * x;
+                            {
+                                let to_zoom_res = to_zoom_res.unwrap_or(from_zoom_res);
+                                let zoom_res = (from_zoom_res * (1.0 - x) + to_zoom_res * x)
+                                    * (1.0 + zoom_up * y);
 
                                 context.set_zoom_res(zoom_res, false);
                             }
@@ -237,6 +252,10 @@ impl Map {
                     }
                 }
 
+                if let Ok(mut context) = context.lock() {
+                    context.animating = false;
+                }
+
                 let _ = event_sender.send(Event::MapRequestRedraw);
             }
         }));
@@ -248,6 +267,8 @@ impl Map {
 
     /// Jump to the given view, without an animated transition.
     pub fn jump_to(&mut self, map_view_change: &MapViewChange) {
+        self.cancel_anim();
+
         {
             if let Ok(mut context) = self.context.lock() {
                 if let Some(center) = map_view_change.center {
@@ -395,6 +416,14 @@ impl Map {
         if let Some(anim_handle) = self.anim_handle.take() {
             anim_handle.abort();
         }
+
+        {
+            if let Ok(mut context) = self.context.lock() {
+                context.animating = false;
+            }
+        }
+
+        self.anim_handle = None;
     }
 
     fn request_redraw(&self) {

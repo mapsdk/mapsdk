@@ -11,6 +11,8 @@ pub struct MapContext {
 
     pub layers: HashMap<String, Box<dyn Layer>>,
     pub renderer: Option<Renderer>,
+
+    pub animating: bool,
 }
 
 impl MapContext {
@@ -30,6 +32,8 @@ impl MapContext {
 
             layers: HashMap::new(),
             renderer: None,
+
+            animating: false,
         }
     }
 
@@ -53,9 +57,11 @@ impl MapContext {
         }
 
         if let Some(renderer) = &mut self.renderer {
-            for (id, layer) in &mut self.layers {
-                log::debug!("Update layer [{}]", id);
-                layer.update(&self.map_options, &self.state, renderer);
+            if !self.animating {
+                for (id, layer) in &mut self.layers {
+                    log::debug!("Update layer [{}]", id);
+                    layer.update(&self.map_options, &self.state, renderer);
+                }
             }
 
             renderer.render(&self.state);
@@ -104,7 +110,11 @@ impl MapContext {
             .tiling
             .get_resolution(self.map_options.zoom_max);
 
-        let new_zoom_res = zoom_res.clamp(zoom_res_min, zoom_res_max);
+        let new_zoom_res = if self.animating {
+            zoom_res
+        } else {
+            zoom_res.clamp(zoom_res_min, zoom_res_max)
+        };
 
         self.state.zoom_res = new_zoom_res;
         if update_zoom {

@@ -283,34 +283,35 @@ impl ApplicationHandler for App {
                 ..
             } => {
                 if state == ElementState::Pressed && !repeat {
+                    let map_view_change = MapViewChange::default()
+                        .with_center(
+                            lonlat_to_wm(&Coord {
+                                x: -180.0 + 360.0 * self.rng.gen::<f64>(),
+                                y: -60.0 + 120.0 * self.rng.gen::<f64>(),
+                            })
+                            .unwrap(),
+                        )
+                        .with_pitch(30.0 * self.rng.gen::<f64>())
+                        .with_yaw(-60.0 + 120.0 * self.rng.gen::<f64>());
                     match physical_key {
                         PhysicalKey::Code(KeyCode::KeyE) => {
-                            self.map.ease_to(
-                                &MapViewChange::default()
-                                    .with_center(
-                                        lonlat_to_wm(&Coord {
-                                            x: -180.0 + 360.0 * self.rng.gen::<f64>(),
-                                            y: -60.0 + 120.0 * self.rng.gen::<f64>(),
-                                        })
-                                        .unwrap(),
-                                    )
-                                    .with_pitch(60.0 * self.rng.gen::<f64>())
-                                    .with_yaw(-60.0 + 120.0 * self.rng.gen::<f64>()),
-                                Duration::from_millis(2000),
-                            );
+                            self.map
+                                .ease_to(&map_view_change, Duration::from_millis(2000));
+                        }
+                        PhysicalKey::Code(KeyCode::KeyF) => {
+                            self.map
+                                .fly_to(&map_view_change, Duration::from_millis(2000), 4);
                         }
                         PhysicalKey::Code(KeyCode::KeyJ) => {
+                            self.map.jump_to(&map_view_change);
+                        }
+                        PhysicalKey::Code(KeyCode::KeyR) => {
                             self.map.jump_to(
                                 &MapViewChange::default()
-                                    .with_center(
-                                        lonlat_to_wm(&Coord {
-                                            x: -180.0 + 360.0 * self.rng.gen::<f64>(),
-                                            y: -60.0 + 120.0 * self.rng.gen::<f64>(),
-                                        })
-                                        .unwrap(),
-                                    )
-                                    .with_pitch(60.0 * self.rng.gen::<f64>())
-                                    .with_yaw(-60.0 + 120.0 * self.rng.gen::<f64>()),
+                                    .with_center(Coord { x: 0.0, y: 0.0 })
+                                    .with_zoom_res(f64::MAX)
+                                    .with_pitch(0.0)
+                                    .with_yaw(0.0),
                             );
                         }
                         _ => (),
