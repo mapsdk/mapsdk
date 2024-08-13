@@ -157,9 +157,9 @@ pub fn create_shape_stroke_pipeline(rendering_context: &RenderingContext) -> Ren
     });
 
     let vertex_buffer_layout = VertexBufferLayout {
-        array_stride: std::mem::size_of::<[f32; 8]>() as BufferAddress,
+        array_stride: std::mem::size_of::<[f32; 7]>() as BufferAddress,
         step_mode: VertexStepMode::Vertex,
-        attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Float32x2, 3 => Float32x2],
+        attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Float32x2, 3 => Float32],
     };
 
     device.create_render_pipeline(&RenderPipelineDescriptor {

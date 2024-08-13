@@ -5,6 +5,7 @@ members=["mapsdk", "examples/*"]
 [workspace.dependencies]
 async-trait = "0.1.81"
 bytemuck = { version = "1.16.1", features = [ "derive" ] }
+bytes = "1.7.1"
 env_logger = "0.11.3"
 dashmap = "6.0.1"
 geo = "0.28.0"
@@ -15,7 +16,9 @@ lazy_static = "1.5.0"
 log = "0.4.22"
 lyon = "1.0.1"
 moka = { version = "0.12.8", features = ["sync"] }
+mvt-reader = { version = "1.5.0", features = ["wasm"] }
 nanoid = "0.4.0"
+num-traits = "0.2.19"
 pollster = "0.3.0"
 priority-queue = "2.0.3"
 rand = "0.8.5"

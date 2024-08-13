@@ -1,3 +1,4 @@
+use geo::Rect;
 use wgpu::*;
 
 use crate::{
@@ -18,8 +19,8 @@ use crate::{
     },
 };
 
-pub struct FeatureDrawable {
-    feature: Feature,
+pub struct VectorTileFeatureDrawable {
+    feature: Feature<f32>,
     z: f32,
     shape_styles: ShapeStyles,
 
@@ -29,12 +30,18 @@ pub struct FeatureDrawable {
     stroke_buffers: Vec<VertexIndexBuffer>,
 }
 
-impl FeatureDrawable {
-    pub fn new(renderer: &Renderer, feature: &Feature, z: f64, shape_styles: &ShapeStyles) -> Self {
+impl VectorTileFeatureDrawable {
+    pub fn new(
+        renderer: &Renderer,
+        feature: &Feature<f32>,
+        tile_bbox: &Rect,
+        z: f64,
+        shape_styles: &ShapeStyles,
+    ) -> Self {
         let rendering_context = &renderer.rendering_context;
 
         let tessellations = match feature.shape() {
-            Shape::Circle { center, radius } => tessellate_circle(center, *radius as f32, 6),
+            Shape::Circle { center, radius } => tessellate_circle(center, *radius, 6),
             Shape::Geometry(geom) => tessellate_geometry(&geom),
         };
 
@@ -68,7 +75,7 @@ impl FeatureDrawable {
     }
 }
 
-impl Drawable for FeatureDrawable {
+impl Drawable for VectorTileFeatureDrawable {
     fn draw(&self, map_state: &MapState, renderer: &Renderer, render_pass: &mut RenderPass) {
         let rendering_context = &renderer.rendering_context;
         let rendering_resources = &renderer.rendering_resources;
@@ -152,8 +159,8 @@ impl Drawable for FeatureDrawable {
     }
 }
 
-impl Into<DrawItem> for FeatureDrawable {
+impl Into<DrawItem> for VectorTileFeatureDrawable {
     fn into(self) -> DrawItem {
-        DrawItem::Feature(self)
+        DrawItem::VectorTileFeature(self)
     }
 }

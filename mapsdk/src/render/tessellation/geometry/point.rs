@@ -1,10 +1,13 @@
-use crate::render::tessellation::{FillVertexIndex, Tessellations};
+use crate::{
+    render::tessellation::{FillVertexIndex, Tessellations},
+    CoordType,
+};
 
-pub fn tessellate_point(point: &geo::Point) -> Tessellations {
+pub fn tessellate_point<T: CoordType>(point: &geo::Point<T>) -> Tessellations {
     let mut output: Tessellations = Tessellations::new();
 
     {
-        let vertex: [f32; 2] = [point.x() as f32, point.y() as f32];
+        let vertex: [f32; 2] = [CoordType::to_f32(point.x()), CoordType::to_f32(point.y())];
 
         let fill_vertices: Vec<[f32; 2]> =
             vec![vertex, vertex.clone(), vertex.clone(), vertex.clone()];
@@ -19,7 +22,7 @@ pub fn tessellate_point(point: &geo::Point) -> Tessellations {
     output
 }
 
-pub fn tessellate_multi_point(multi_point: &geo::MultiPoint) -> Tessellations {
+pub fn tessellate_multi_point<T: CoordType>(multi_point: &geo::MultiPoint<T>) -> Tessellations {
     let mut output: Tessellations = Tessellations::new();
 
     for point in multi_point.iter() {

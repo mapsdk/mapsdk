@@ -7,6 +7,8 @@ use crate::{
 pub mod feature_layer;
 pub mod image_layer;
 pub mod image_tiled_layer;
+pub mod vector_tiled_layer;
+
 pub(crate) mod tiled;
 
 pub trait Layer: Send + Sync {

@@ -1,14 +1,18 @@
+use geo::*;
 use lyon::{
     math::point,
     path::Path,
     tessellation::{BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers},
 };
 
-use crate::render::tessellation::{
-    geometry::line_string::tessellate_line_string, FillVertexIndex, Tessellations,
+use crate::{
+    render::tessellation::{
+        geometry::line_string::tessellate_line_string, FillVertexIndex, Tessellations,
+    },
+    CoordType,
 };
 
-pub fn tessellate_polygon(polygon: &geo::Polygon) -> Tessellations {
+pub fn tessellate_polygon<T: CoordType>(polygon: &geo::Polygon<T>) -> Tessellations {
     let mut output: Tessellations = Tessellations::new();
 
     {
@@ -23,7 +27,7 @@ pub fn tessellate_polygon(polygon: &geo::Polygon) -> Tessellations {
 
         {
             for (i, coord) in polygon.exterior().coords().enumerate() {
-                let p = point(coord.x as f32, coord.y as f32);
+                let p = point(CoordType::to_f32(coord.x), CoordType::to_f32(coord.y));
 
                 if i == 0 {
                     path_builder.begin(p);
@@ -35,7 +39,7 @@ pub fn tessellate_polygon(polygon: &geo::Polygon) -> Tessellations {
 
             for hole in polygon.interiors() {
                 for (i, coord) in hole.coords().enumerate() {
-                    let p = point(coord.x as f32, coord.y as f32);
+                    let p = point(CoordType::to_f32(coord.x), CoordType::to_f32(coord.y));
 
                     if i == 0 {
                         path_builder.begin(p);
@@ -68,7 +72,9 @@ pub fn tessellate_polygon(polygon: &geo::Polygon) -> Tessellations {
         output.strokes.extend(exterior_tessellations.strokes);
 
         for interior in polygon.interiors() {
-            let interior_tessellations = tessellate_line_string(&interior);
+            let reversed_interior =
+                LineString::from(interior.coords_iter().rev().collect::<Vec<_>>());
+            let interior_tessellations = tessellate_line_string(&reversed_interior);
             output.strokes.extend(interior_tessellations.strokes);
         }
     }
@@ -76,7 +82,9 @@ pub fn tessellate_polygon(polygon: &geo::Polygon) -> Tessellations {
     output
 }
 
-pub fn tessellate_multi_polygon(multi_polygon: &geo::MultiPolygon) -> Tessellations {
+pub fn tessellate_multi_polygon<T: CoordType>(
+    multi_polygon: &geo::MultiPolygon<T>,
+) -> Tessellations {
     let mut output: Tessellations = Tessellations::new();
 
     for polygon in multi_polygon.iter() {

@@ -1,19 +1,22 @@
 use geo::{line_string, Geometry::*};
 
-use crate::render::tessellation::{
-    geometry::{
-        line_string::{tessellate_line_string, tessellate_multi_line_string},
-        point::{tessellate_multi_point, tessellate_point},
-        polygon::{tessellate_multi_polygon, tessellate_polygon},
+use crate::{
+    render::tessellation::{
+        geometry::{
+            line_string::{tessellate_line_string, tessellate_multi_line_string},
+            point::{tessellate_multi_point, tessellate_point},
+            polygon::{tessellate_multi_polygon, tessellate_polygon},
+        },
+        Tessellations,
     },
-    Tessellations,
+    CoordType,
 };
 
 pub mod line_string;
 pub mod point;
 pub mod polygon;
 
-pub fn tessellate_geometry(geom: &geo::Geometry) -> Tessellations {
+pub fn tessellate_geometry<T: CoordType>(geom: &geo::Geometry<T>) -> Tessellations {
     match geom {
         Point(point) => tessellate_point(point),
         Line(line) => tessellate_line_string(&line_string![line.start, line.end]),
@@ -30,8 +33,8 @@ pub fn tessellate_geometry(geom: &geo::Geometry) -> Tessellations {
     }
 }
 
-pub fn tessellate_geometry_collection(
-    geometry_collection: &geo::GeometryCollection,
+pub fn tessellate_geometry_collection<T: CoordType>(
+    geometry_collection: &geo::GeometryCollection<T>,
 ) -> Tessellations {
     let mut output: Tessellations = Tessellations::new();
 

@@ -2,25 +2,26 @@ use std::{collections::HashSet, sync::Arc};
 
 use dashmap::{DashMap, DashSet};
 use geo::Intersects;
-use image::DynamicImage;
 use moka::sync::Cache;
 use tokio::{sync::mpsc, task::JoinHandle};
 
 use crate::{
     env,
+    feature::style::ShapeStyles,
     layer::{
         tiled::{format_tile_url, tile_ids_in_view},
         Event, Layer, LayerType,
     },
     map::{context::MapState, Map, MapOptions},
-    render::{draw::image::ImageDrawable, Renderer},
+    render::{draw::vector_tile::VectorTileDrawable, Renderer},
     tiling::TileId,
     utils::http::{HttpPool, HttpRequest, HttpResponse},
+    vector_tile::VectorTile,
 };
 
-pub struct ImageTiledLayer {
-    url_template: String, // http://{s}.tile.osm.org/{z}/{x}/{y}.png
-    options: ImageTiledLayerOptions,
+pub struct VectorTiledLayer {
+    url_template: String, // https://demotiles.maplibre.org/tiles/{z}/{x}/{y}.pbf
+    options: VectorTiledLayerOptions,
 
     name: String,
     event_sender: Option<mpsc::UnboundedSender<Event>>,
@@ -30,12 +31,12 @@ pub struct ImageTiledLayer {
 
     requesting_tile_ids: Arc<DashSet<TileId>>,
 
-    image_tiles_cache: Cache<TileId, DynamicImage>,
-    image_tiles: Arc<DashMap<TileId, DynamicImage>>,
+    vector_tiles_cache: Cache<TileId, VectorTile>,
+    vector_tiles: Arc<DashMap<TileId, VectorTile>>,
 }
 
-impl ImageTiledLayer {
-    pub fn new(url_template: &str, options: ImageTiledLayerOptions) -> Self {
+impl VectorTiledLayer {
+    pub fn new(url_template: &str, options: VectorTiledLayerOptions) -> Self {
         let cache_size = options.cache_size;
 
         Self {
@@ -50,15 +51,15 @@ impl ImageTiledLayer {
 
             requesting_tile_ids: Arc::new(DashSet::new()),
 
-            image_tiles_cache: Cache::new(cache_size),
-            image_tiles: Arc::new(DashMap::new()),
+            vector_tiles_cache: Cache::new(cache_size),
+            vector_tiles: Arc::new(DashMap::new()),
         }
     }
 }
 
-impl Layer for ImageTiledLayer {
+impl Layer for VectorTiledLayer {
     fn r#type(&self) -> LayerType {
-        LayerType::ImageTiledLayer
+        LayerType::VectorTiledLayer
     }
 
     fn on_add_to_map(&mut self, map: &Map) {
@@ -73,7 +74,8 @@ impl Layer for ImageTiledLayer {
         self.tile_fetcher = Some(HttpPool::new(self.options.concurrent, tile_response_sender));
 
         self.tile_response_handle = Some(env::spawn({
-            let image_tiles_cache = self.image_tiles_cache.clone();
+            let tiling = map.options.tiling.clone();
+            let vector_tiles_cache = self.vector_tiles_cache.clone();
             let requesting_tile_ids = self.requesting_tile_ids.clone();
             let event_sender = self.event_sender.clone();
 
@@ -83,15 +85,19 @@ impl Layer for ImageTiledLayer {
 
                     if let Some(http_response) = http_response {
                         let tile_id = http_response.id.clone();
-                        if let Ok(bytes) = http_response.bytes().await {
-                            if let Ok(image) = image::load_from_memory(&bytes) {
-                                log::debug!("Image tile {} loaded", tile_id.to_string());
-                                image_tiles_cache.insert(tile_id.clone(), image);
+                        if let Some(tile_bbox) = tiling.get_tile_bbox(&tile_id) {
+                            if let Ok(bytes) = http_response.bytes().await {
+                                if let Ok(vector_tile) =
+                                    VectorTile::from_data(bytes.to_vec(), &tile_bbox)
+                                {
+                                    log::debug!("Vector tile {} loaded", tile_id.to_string());
+                                    vector_tiles_cache.insert(tile_id.clone(), vector_tile);
 
-                                requesting_tile_ids.remove(&tile_id);
+                                    requesting_tile_ids.remove(&tile_id);
 
-                                if let Some(event_sender) = &event_sender {
-                                    let _ = event_sender.send(Event::MapRequestRedraw);
+                                    if let Some(event_sender) = &event_sender {
+                                        let _ = event_sender.send(Event::MapRequestRedraw);
+                                    }
                                 }
                             }
                         }
@@ -147,9 +153,10 @@ impl Layer for ImageTiledLayer {
 
         // Load tiles from cache if possible
         tile_ids.iter().for_each(|tile_id| {
-            if !self.image_tiles.contains_key(tile_id) {
-                if let Some(image_tile) = self.image_tiles_cache.get(tile_id) {
-                    self.image_tiles.insert(tile_id.clone(), image_tile.clone());
+            if !self.vector_tiles.contains_key(tile_id) {
+                if let Some(vector_tile) = self.vector_tiles_cache.get(tile_id) {
+                    self.vector_tiles
+                        .insert(tile_id.clone(), vector_tile.clone());
                 }
             }
         });
@@ -158,7 +165,7 @@ impl Layer for ImageTiledLayer {
         {
             let mut load_tile_ids = tile_ids
                 .iter()
-                .filter(|tile_id| !self.image_tiles.contains_key(&tile_id))
+                .filter(|tile_id| !self.vector_tiles.contains_key(&tile_id))
                 .collect::<Vec<_>>();
 
             load_tile_ids.sort_by_key(|tile_id| {
@@ -199,7 +206,7 @@ impl Layer for ImageTiledLayer {
         {
             let mut dirty_tiles: HashSet<TileId> = HashSet::new();
 
-            for pair in self.image_tiles.iter() {
+            for pair in self.vector_tiles.iter() {
                 let tile_id = pair.key();
 
                 if let Some(bbox) = map_options.tiling.get_tile_bbox(&tile_id) {
@@ -219,14 +226,14 @@ impl Layer for ImageTiledLayer {
 
             // Keep resample tiles if possible
             for tile_id in &tile_ids {
-                if !self.image_tiles.contains_key(tile_id) {
+                if !self.vector_tiles.contains_key(tile_id) {
                     let mut roll_up_resampled = false;
 
                     for level in 1..=5 {
                         if let Some(parent_tile_id) =
                             map_options.tiling.roll_up_tile_id(tile_id, level)
                         {
-                            if self.image_tiles.contains_key(&parent_tile_id) {
+                            if self.vector_tiles.contains_key(&parent_tile_id) {
                                 dirty_tiles.remove(&parent_tile_id);
                                 roll_up_resampled = true;
                                 break;
@@ -248,19 +255,25 @@ impl Layer for ImageTiledLayer {
             }
 
             for tile_id in dirty_tiles {
-                self.image_tiles.remove(&tile_id);
+                self.vector_tiles.remove(&tile_id);
 
                 renderer.remove_layer_draw_item(&self.name, &tile_id);
             }
         }
 
-        for pair in self.image_tiles.iter() {
+        for pair in self.vector_tiles.iter() {
             let tile_id = pair.key();
-            let image = pair.value();
+            let vector_tile = pair.value();
 
             if let Some(bbox) = map_options.tiling.get_tile_bbox(&tile_id) {
                 if !renderer.contains_layer_draw_item(&self.name, tile_id) {
-                    let drawable = ImageDrawable::new(renderer, &image, &bbox, self.options.z);
+                    let drawable = VectorTileDrawable::new(
+                        renderer,
+                        &vector_tile,
+                        &bbox,
+                        self.options.z,
+                        &self.options.layers_shape_styles,
+                    );
                     renderer.add_layer_draw_item(&self.name, tile_id, drawable.into());
                 }
             }
@@ -268,15 +281,16 @@ impl Layer for ImageTiledLayer {
     }
 }
 
-pub struct ImageTiledLayerOptions {
+pub struct VectorTiledLayerOptions {
     cache_size: u64,
     concurrent: usize,
     headers: Vec<(String, String)>,
+    layers_shape_styles: Vec<(String, ShapeStyles)>,
     url_subdomains: Option<Vec<String>>,
     z: f64,
 }
 
-impl ImageTiledLayerOptions {
+impl VectorTiledLayerOptions {
     pub fn with_cache_size(mut self, v: u64) -> Self {
         self.cache_size = v;
         self
@@ -295,6 +309,11 @@ impl ImageTiledLayerOptions {
         self
     }
 
+    pub fn with_layers_shape_styles(mut self, v: &Vec<(impl ToString, ShapeStyles)>) -> Self {
+        self.layers_shape_styles = v.iter().map(|(k, v)| (k.to_string(), v.clone())).collect();
+        self
+    }
+
     pub fn with_url_subdomains(mut self, v: &Vec<impl ToString>) -> Self {
         self.url_subdomains = Some(v.iter().map(|s| s.to_string()).collect());
         self
@@ -306,12 +325,13 @@ impl ImageTiledLayerOptions {
     }
 }
 
-impl Default for ImageTiledLayerOptions {
+impl Default for VectorTiledLayerOptions {
     fn default() -> Self {
         Self {
             cache_size: 512,
             concurrent: 8,
             headers: Vec::new(),
+            layers_shape_styles: Vec::new(),
             url_subdomains: None,
             z: 0.0,
         }

@@ -1,151 +1,138 @@
-use glam::Vec2;
+use crate::{
+    render::tessellation::{StrokeVertexIndex, Tessellations},
+    CoordType,
+};
 
-use crate::render::tessellation::{StrokeVertexIndex, Tessellations};
-
-pub fn tessellate_line_string(line_string: &geo::LineString) -> Tessellations {
+pub fn tessellate_line_string<T: CoordType>(line_string: &geo::LineString<T>) -> Tessellations {
     let mut output: Tessellations = Tessellations::new();
 
+    let vertices: Vec<[f32; 2]> = line_string
+        .coords()
+        .map(|v| [CoordType::to_f32(v.x), CoordType::to_f32(v.y)])
+        .collect();
+
+    let is_closed = line_string.is_closed();
+
     {
-        let mut stroke_vertices: Vec<[f32; 8]> = Vec::new();
+        let mut stroke_vertices: Vec<[f32; 7]> = Vec::new();
         let mut stroke_indices: Vec<u16> = Vec::new();
-        let mut index_offset: u16 = 0;
+        let mut stroke_index_offset: u16 = 0;
 
-        let vertices: Vec<_> = line_string
-            .coords()
-            .map(|v| Vec2::new(v.x as f32, v.y as f32))
-            .collect();
-
-        for i in 0..vertices.len() - 1 {
-            let seg_dir = (vertices[i + 1] - vertices[i]).normalize_or_zero();
-            let seg_norm = Vec2::new(-seg_dir.y, seg_dir.x);
-
-            let prev_seg_dir = if i == 0 {
-                if line_string.is_closed() {
-                    (vertices[vertices.len() - 1] - vertices[vertices.len() - 2])
-                        .normalize_or_zero()
-                } else {
-                    seg_dir
-                }
-            } else {
-                (vertices[i] - vertices[i - 1]).normalize_or_zero()
-            };
-            let seg_start_join_angle = seg_dir.angle_to(prev_seg_dir);
-
-            let next_seg_dir = if i == vertices.len() - 2 {
-                if line_string.is_closed() {
-                    (vertices[1] - vertices[0]).normalize_or_zero()
-                } else {
-                    seg_dir
-                }
-            } else {
-                (vertices[i + 2] - vertices[i + 1]).normalize_or_zero()
-            };
-            let seg_end_join_angle = next_seg_dir.angle_to(seg_dir);
-
-            let seg_start_vertex = vertices[i];
-            let seg_end_vertex = vertices[i + 1];
-
+        let seg_count = vertices.len() - 1;
+        for i in 0..seg_count {
             // Line start join
-            if i > 0 || (i == 0 && line_string.is_closed()) {
-                if seg_start_join_angle != 0.0 {
-                    let join_vertex = vertices[i];
-                    let join_dir = (prev_seg_dir + seg_dir).normalize_or_zero();
-                    let join_norm =
-                        Vec2::new(-join_dir.y, join_dir.x) * seg_start_join_angle.signum();
-                    let join_norm_offset = join_norm / (seg_start_join_angle / 2.0).cos().abs();
-                    let edge_norm = seg_norm * seg_start_join_angle.signum();
+            {
+                if i > 0 || (i == 0 && is_closed) {
+                    let v = vertices[i];
+                    let v_prev = if i == 0 {
+                        vertices[seg_count - 1]
+                    } else {
+                        vertices[i - 1]
+                    };
+                    let v_next = vertices[i + 1];
 
-                    stroke_vertices.push([
-                        join_vertex.x,
-                        join_vertex.y,
-                        0.0,
-                        0.0,
-                        join_norm_offset.x,
-                        join_norm_offset.y,
-                        edge_norm.x,
-                        edge_norm.y,
-                    ]);
+                    stroke_vertices
+                        .push([v[0], v[1], v_prev[0], v_prev[1], v_next[0], v_next[1], 0.3]);
 
                     stroke_indices.extend_from_slice(&[
-                        index_offset,
-                        index_offset + 1,
-                        index_offset + 2,
+                        stroke_index_offset,
+                        stroke_index_offset + 2,
+                        stroke_index_offset + 1,
                     ]);
 
-                    index_offset += 1;
+                    stroke_index_offset += 1;
                 }
             }
 
             // Straight line segment
             {
-                for j in [1.0, -1.0] {
-                    let offset_scale = (seg_start_join_angle / 2.0).tan().abs();
-                    stroke_vertices.push([
-                        seg_start_vertex.x,
-                        seg_start_vertex.y,
-                        seg_dir.x * offset_scale,
-                        seg_dir.y * offset_scale,
-                        j * seg_norm.x,
-                        j * seg_norm.y,
-                        j * seg_norm.x,
-                        j * seg_norm.y,
-                    ]);
+                // Line start
+                {
+                    let v = vertices[i];
+                    let v_prev = if i == 0 {
+                        if is_closed {
+                            vertices[seg_count - 1]
+                        } else {
+                            vertices[0]
+                        }
+                    } else {
+                        vertices[i - 1]
+                    };
+                    let v_next = vertices[i + 1];
+
+                    stroke_vertices
+                        .push([v[0], v[1], v_prev[0], v_prev[1], v_next[0], v_next[1], 0.1]);
+                    stroke_vertices
+                        .push([v[0], v[1], v_prev[0], v_prev[1], v_next[0], v_next[1], 0.2]);
                 }
 
-                for j in [1.0, -1.0] {
-                    let offset_scale = (seg_end_join_angle / 2.0).tan().abs();
-                    stroke_vertices.push([
-                        seg_end_vertex.x,
-                        seg_end_vertex.y,
-                        -seg_dir.x * offset_scale,
-                        -seg_dir.y * offset_scale,
-                        j * seg_norm.x,
-                        j * seg_norm.y,
-                        j * seg_norm.x,
-                        j * seg_norm.y,
-                    ]);
+                // Line end
+                {
+                    let v = vertices[i + 1];
+                    let v_prev = vertices[i];
+                    let v_next = if i == seg_count - 1 {
+                        if is_closed {
+                            vertices[1]
+                        } else {
+                            vertices[i + 1]
+                        }
+                    } else {
+                        vertices[i + 2]
+                    };
+
+                    stroke_vertices
+                        .push([v[0], v[1], v_prev[0], v_prev[1], v_next[0], v_next[1], 1.1]);
+                    stroke_vertices
+                        .push([v[0], v[1], v_prev[0], v_prev[1], v_next[0], v_next[1], 1.2]);
                 }
 
                 stroke_indices.extend_from_slice(&[
-                    index_offset,
-                    index_offset + 1,
-                    index_offset + 2,
-                    index_offset + 2,
-                    index_offset + 1,
-                    index_offset + 3,
+                    stroke_index_offset,
+                    stroke_index_offset + 1,
+                    stroke_index_offset + 2,
+                    stroke_index_offset + 2,
+                    stroke_index_offset + 1,
+                    stroke_index_offset + 3,
                 ]);
 
-                index_offset += 4;
+                stroke_index_offset += 4;
             }
 
             // Line end join
-            if i < vertices.len() - 2 || (i == vertices.len() - 2 && line_string.is_closed()) {
-                if seg_end_join_angle != 0.0 {
-                    let join_vertex = vertices[i + 1];
-                    let join_dir = (seg_dir + next_seg_dir).normalize_or_zero();
-                    let join_norm =
-                        Vec2::new(-join_dir.y, join_dir.x) * seg_end_join_angle.signum();
-                    let join_norm_offset = join_norm / (seg_end_join_angle / 2.0).cos().abs();
-                    let edge_norm = seg_norm * seg_end_join_angle.signum();
+            {
+                if i < seg_count - 1 || (i == seg_count - 1 && is_closed) {
+                    let v = vertices[i + 1];
+                    let v_prev = vertices[i];
+                    let v_next = if i == seg_count - 1 {
+                        vertices[1]
+                    } else {
+                        vertices[i + 2]
+                    };
 
-                    stroke_vertices.push([
-                        join_vertex.x,
-                        join_vertex.y,
-                        0.0,
-                        0.0,
-                        join_norm_offset.x,
-                        join_norm_offset.y,
-                        edge_norm.x,
-                        edge_norm.y,
-                    ]);
+                    stroke_vertices
+                        .push([v[0], v[1], v_prev[0], v_prev[1], v_next[0], v_next[1], 1.3]);
 
                     stroke_indices.extend_from_slice(&[
-                        index_offset - 2,
-                        index_offset - 1,
-                        index_offset,
+                        stroke_index_offset - 2,
+                        stroke_index_offset - 1,
+                        stroke_index_offset,
                     ]);
 
-                    index_offset += 1;
+                    if i == seg_count - 1 {
+                        stroke_indices.extend_from_slice(&[
+                            stroke_index_offset - 2,
+                            stroke_index_offset,
+                            0,
+                        ]);
+                    } else {
+                        stroke_indices.extend_from_slice(&[
+                            stroke_index_offset - 2,
+                            stroke_index_offset,
+                            stroke_index_offset + 1,
+                        ]);
+                    }
+
+                    stroke_index_offset += 1;
                 }
             }
         }
@@ -159,7 +146,9 @@ pub fn tessellate_line_string(line_string: &geo::LineString) -> Tessellations {
     output
 }
 
-pub fn tessellate_multi_line_string(multi_line_string: &geo::MultiLineString) -> Tessellations {
+pub fn tessellate_multi_line_string<T: CoordType>(
+    multi_line_string: &geo::MultiLineString<T>,
+) -> Tessellations {
     let mut output: Tessellations = Tessellations::new();
 
     for line_string in multi_line_string.iter() {

@@ -4,7 +4,8 @@ use crate::{
     feature::style::ShapeStyles,
     render::{
         resources::buffer::{
-            create_uniform_buffer_from_f32_slice, create_uniform_buffer_from_vec4_f32_slice,
+            create_uniform_buffer_from_f32_slice, create_uniform_buffer_from_u32_slice,
+            create_uniform_buffer_from_vec4_f32_slice,
         },
         Camera, MapState, RenderingContext,
     },
@@ -247,16 +248,19 @@ pub fn create_shape_stroke_params_bg(
     rendering_context: &RenderingContext,
     layout: &BindGroupLayout,
     z: f32,
+    align: u32,
     shape_styles: &ShapeStyles,
 ) -> BindGroup {
     let pixel_ratio = rendering_context.pixel_ratio;
 
     let z_buffer = create_uniform_buffer_from_f32_slice(rendering_context, "Z Buffer", &[z]);
+    let align_buffer =
+        create_uniform_buffer_from_u32_slice(rendering_context, "Align Buffer", &[align]);
 
-    let stroke_half_width_buffer = create_uniform_buffer_from_f32_slice(
+    let stroke_width_buffer = create_uniform_buffer_from_f32_slice(
         rendering_context,
-        "Stroke Half Width Buffer",
-        &[0.5 * shape_styles.stroke_width * pixel_ratio as f32],
+        "Stroke Width Buffer",
+        &[shape_styles.stroke_width * pixel_ratio as f32],
     );
 
     let stroke_color: [f32; 4] = shape_styles.stroke_color.clone().into();
@@ -278,10 +282,14 @@ pub fn create_shape_stroke_params_bg(
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: stroke_half_width_buffer.as_entire_binding(),
+                    resource: align_buffer.as_entire_binding(),
                 },
                 BindGroupEntry {
                     binding: 2,
+                    resource: stroke_width_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 3,
                     resource: stroke_color_buffer.as_entire_binding(),
                 },
             ],
@@ -316,6 +324,16 @@ pub fn create_shape_stroke_params_bgl(rendering_context: &RenderingContext) -> B
                 },
                 BindGroupLayoutEntry {
                     binding: 2,
+                    visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 3,
                     visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,

@@ -1,6 +1,6 @@
 use std::{cmp::Reverse, error::Error, fmt::Debug, hash::Hash, sync::Arc, time::SystemTime};
 
-use image::{load_from_memory, DynamicImage};
+use bytes::Bytes;
 use priority_queue::PriorityQueue;
 use reqwest::{
     header::{HeaderMap, HeaderName, HeaderValue},
@@ -80,9 +80,8 @@ pub struct HttpResponse<T> {
 }
 
 impl<T> HttpResponse<T> {
-    pub async fn image(self) -> Result<DynamicImage, Box<dyn Error>> {
-        let bytes = self.response.bytes().await?;
-        Ok(load_from_memory(&bytes)?)
+    pub async fn bytes(self) -> Result<Bytes, reqwest::Error> {
+        self.response.bytes().await
     }
 }
 

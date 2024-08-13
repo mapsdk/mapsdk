@@ -1,29 +1,25 @@
-use std::{collections::HashMap, error::Error};
+use std::{collections::HashMap, error::Error, fmt::Debug};
 
-use geo::{BoundingRect, Coord, CoordsIter, Geometry, Rect};
+use geo::*;
 use nanoid::nanoid;
 
-use crate::JsonValue;
+use crate::{CoordType, JsonValue};
 
 pub mod style;
 
 #[derive(Clone, Debug)]
-pub struct Feature {
+pub struct Feature<T: CoordType = f64> {
     id: String,
-    shape: Shape,
+    shape: Shape<T>,
     attrs: Option<HashMap<String, JsonValue>>,
-    bbox: Rect,
 }
 
-impl Feature {
-    pub fn new(id: &str, shape: Shape, attrs: Option<HashMap<String, JsonValue>>) -> Self {
-        let bbox = shape.bbox();
-
+impl<T: CoordType> Feature<T> {
+    pub fn new(id: &str, shape: Shape<T>, attrs: Option<HashMap<String, JsonValue>>) -> Self {
         Self {
             id: id.to_string(),
             shape,
             attrs,
-            bbox,
         }
     }
 
@@ -31,16 +27,12 @@ impl Feature {
         &self.id
     }
 
-    pub fn shape(&self) -> &Shape {
+    pub fn shape(&self) -> &Shape<T> {
         &self.shape
     }
 
     pub fn attrs(&self) -> &Option<HashMap<String, JsonValue>> {
         &self.attrs
-    }
-
-    pub fn bbox(&self) -> &Rect {
-        &self.bbox
     }
 }
 
@@ -86,22 +78,22 @@ impl Features {
 }
 
 #[derive(Clone, Debug)]
-pub enum Shape {
-    Geometry(Geometry),
-    Circle { center: Coord, radius: f64 },
+pub enum Shape<T: CoordType = f64> {
+    Geometry(Geometry<T>),
+    Circle { center: Coord<T>, radius: T },
 }
 
-impl Shape {
-    pub fn bbox(&self) -> Rect {
+impl<T: CoordType> Shape<T> {
+    pub fn bbox(&self) -> Rect<T> {
         match self {
             Shape::Geometry(geom) => {
                 if let Some(rect) = geom.bounding_rect() {
                     rect
                 } else {
-                    let mut xmin = f64::MAX;
-                    let mut ymin = f64::MAX;
-                    let mut xmax = f64::MIN;
-                    let mut ymax = f64::MIN;
+                    let mut xmin = T::num_max();
+                    let mut ymin = T::num_max();
+                    let mut xmax = T::num_min();
+                    let mut ymax = T::num_min();
 
                     geom.coords_iter().for_each(|coord| {
                         xmin = xmin.min(coord.x);
@@ -130,6 +122,16 @@ impl Shape {
         match self {
             Shape::Geometry(geom) => match geom {
                 Geometry::Point(_) | Geometry::MultiPoint(_) => true,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    pub fn is_lines(&self) -> bool {
+        match self {
+            Shape::Geometry(geom) => match geom {
+                Geometry::Line(_) | Geometry::LineString(_) | Geometry::MultiLineString(_) => true,
                 _ => false,
             },
             _ => false,

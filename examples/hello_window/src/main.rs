@@ -4,11 +4,12 @@ use std::time::Duration;
 
 use geo::{line_string, point, polygon, Coord, MultiLineString, MultiPolygon, Rect};
 use mapsdk::{
-    feature::{Feature, Shape},
+    feature::{style::ShapeStyles, Feature, Shape},
     layer::{
         feature_layer::{FeatureLayer, FeatureLayerOptions},
         image_layer::{ImageLayer, ImageLayerOptions},
         image_tiled_layer::{ImageTiledLayer, ImageTiledLayerOptions},
+        vector_tiled_layer::{VectorTiledLayer, VectorTiledLayerOptions},
     },
     map::{Map, MapOptions, MapViewChange},
     render::{Renderer, RendererOptions, RendererType},
@@ -87,9 +88,21 @@ impl ApplicationHandler for App {
                 "http://{s}.tile.osm.org/{z}/{x}/{y}.png",
                 image_tiled_layer_options,
             );
+            //let _ = self.map.add_layer("image tiled", Box::new(image_tiled_layer));
+
+            let vector_tiled_layer_options = VectorTiledLayerOptions::default()
+                .with_layers_shape_styles(&vec![
+                    ("centroids", ShapeStyles::default()),
+                    ("countries", ShapeStyles::default()),
+                    ("geolines", ShapeStyles::default()),
+                ]);
+            let vector_tiled_layer = VectorTiledLayer::new(
+                "https://demotiles.maplibre.org/tiles/{z}/{x}/{y}.pbf",
+                vector_tiled_layer_options,
+            );
             let _ = self
                 .map
-                .add_layer("image tiled", Box::new(image_tiled_layer));
+                .add_layer("vector tiled", Box::new(vector_tiled_layer));
 
             let feature_layer_options = FeatureLayerOptions::default();
             let mut feature_layer = FeatureLayer::new(feature_layer_options);
@@ -111,8 +124,9 @@ impl ApplicationHandler for App {
                 Shape::Geometry(
                     MultiLineString::new(vec![
                         line_string![
-                            lonlat_to_wm(&Coord { x: 20.0, y: -5.0 }).unwrap(),
-                            lonlat_to_wm(&Coord { x: 20.0, y: 5.0 }).unwrap(),
+                            lonlat_to_wm(&Coord { x: 24.0, y: -5.0 }).unwrap(),
+                            lonlat_to_wm(&Coord { x: 24.5, y: 5.0 }).unwrap(),
+                            lonlat_to_wm(&Coord { x: 25.0, y: -5.0 }).unwrap(),
                         ],
                         line_string![
                             lonlat_to_wm(&Coord { x: 35.0, y: -5.0 }).unwrap(),

@@ -7,11 +7,18 @@ use lyon::{
     tessellation::{BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers},
 };
 
-use crate::render::tessellation::{
-    geometry::line_string::tessellate_line_string, FillVertexIndex, Tessellations,
+use crate::{
+    render::tessellation::{
+        geometry::line_string::tessellate_line_string, FillVertexIndex, Tessellations,
+    },
+    CoordType,
 };
 
-pub fn tessellate_circle(center: &geo::Coord, radius: f32, flatten: usize) -> Tessellations {
+pub fn tessellate_circle<T: CoordType>(
+    center: &geo::Coord<T>,
+    radius: f32,
+    flatten: usize,
+) -> Tessellations {
     let mut output: Tessellations = Tessellations::new();
 
     let mut fill_tessellation: VertexBuffers<[f32; 2], u16> = VertexBuffers::new();
@@ -26,7 +33,7 @@ pub fn tessellate_circle(center: &geo::Coord, radius: f32, flatten: usize) -> Te
 
         let mut tessellator = FillTessellator::new();
         if let Err(err) = tessellator.tessellate_circle(
-            Point::new(center.x as f32, center.y as f32),
+            Point::new(CoordType::to_f32(center.x), CoordType::to_f32(center.y)),
             radius,
             &options,
             &mut buffers_builder,
@@ -43,14 +50,14 @@ pub fn tessellate_circle(center: &geo::Coord, radius: f32, flatten: usize) -> Te
                 (
                     *v,
                     Vec2 {
-                        x: v[0] - center.x as f32,
-                        y: v[1] - center.y as f32,
+                        x: v[0] - CoordType::to_f32(center.x),
+                        y: v[1] - CoordType::to_f32(center.y),
                     }
                     .angle_to(Vec2::X),
                 )
             })
             .collect();
-        outline_vertices_angles.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal));
+        outline_vertices_angles.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
         let mut outline_vertices: Vec<_> = outline_vertices_angles.iter().map(|v| v.0).collect();
         outline_vertices.push(outline_vertices[0]);
 
