@@ -265,17 +265,14 @@ impl Layer for VectorTiledLayer {
             let tile_id = pair.key();
             let vector_tile = pair.value();
 
-            if let Some(bbox) = map_options.tiling.get_tile_bbox(&tile_id) {
-                if !renderer.contains_layer_draw_item(&self.name, tile_id) {
-                    let drawable = VectorTileDrawable::new(
-                        renderer,
-                        &vector_tile,
-                        &bbox,
-                        self.options.z,
-                        &self.options.layers_shape_styles,
-                    );
-                    renderer.add_layer_draw_item(&self.name, tile_id, drawable.into());
-                }
+            if !renderer.contains_layer_draw_item(&self.name, tile_id) {
+                let drawable = VectorTileDrawable::new(
+                    renderer,
+                    &vector_tile,
+                    self.options.z,
+                    &self.options.layers_shape_styles,
+                );
+                renderer.add_layer_draw_item(&self.name, tile_id, drawable.into());
             }
         }
     }

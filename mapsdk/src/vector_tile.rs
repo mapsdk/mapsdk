@@ -230,7 +230,5 @@ mod tests {
             vt.layers.keys().cloned().collect::<Vec<_>>(),
             ["centroids", "countries", "geolines"]
         );
-
-        println!("---{:?}", vt.layers.get("centroids").unwrap().features);
     }
 }
