@@ -13,7 +13,7 @@ use crate::{
     event::Event,
     layer::{Layer, LayerType},
     map::{context::MapState, Map, MapOptions},
-    render::{draw::image::ImageDrawable, Renderer},
+    render::{draw::image::ImageDrawable, InterRenderers, MapRenderer},
     utils::{http::HttpClient, image::image_from_url},
 };
 
@@ -70,7 +70,8 @@ impl Layer for ImageLayer {
         &mut self,
         _map_options: &MapOptions,
         _map_state: &MapState,
-        renderer: &mut Renderer,
+        map_renderer: &mut MapRenderer,
+        _inter_renderers: &mut InterRenderers,
     ) {
         if !self.image_requested {
             self.image_requested = true;
@@ -109,8 +110,10 @@ impl Layer for ImageLayer {
         if self.image_updated.load(Ordering::SeqCst) {
             if let Ok(image) = self.image.read() {
                 if let Some(image) = image.as_ref() {
-                    let drawable = ImageDrawable::new(renderer, &image, &self.rect, self.options.z);
-                    renderer.add_layer_draw_item(&self.name, &self.image_id, drawable.into());
+                    let drawable =
+                        ImageDrawable::new(&map_renderer, &image, &self.rect, self.options.z);
+
+                    map_renderer.add_layer_draw_item(&self.name, &self.image_id, drawable.into());
                 }
             }
 

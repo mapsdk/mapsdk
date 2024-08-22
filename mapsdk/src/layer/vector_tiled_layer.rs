@@ -13,7 +13,7 @@ use crate::{
         Event, Layer, LayerType,
     },
     map::{context::MapState, Map, MapOptions},
-    render::{draw::vector_tile::VectorTileDrawable, Renderer},
+    render::{draw::vector_tile::VectorTileDrawable, InterRenderers, MapRenderer},
     tiling::TileId,
     utils::http::{HttpPool, HttpRequest, HttpResponse},
     vector_tile::VectorTile,
@@ -88,7 +88,7 @@ impl Layer for VectorTiledLayer {
                         if let Some(tile_bbox) = tiling.get_tile_bbox(&tile_id) {
                             if let Ok(bytes) = http_response.bytes().await {
                                 if let Ok(vector_tile) =
-                                    VectorTile::from_data(bytes.to_vec(), &tile_bbox)
+                                    VectorTile::from_data(bytes.to_vec(), tile_bbox)
                                 {
                                     log::debug!("Vector tile {} loaded", tile_id.to_string());
                                     vector_tiles_cache.insert(tile_id.clone(), vector_tile);
@@ -127,7 +127,13 @@ impl Layer for VectorTiledLayer {
         self.name = name.to_string();
     }
 
-    fn update(&mut self, map_options: &MapOptions, map_state: &MapState, renderer: &mut Renderer) {
+    fn update(
+        &mut self,
+        map_options: &MapOptions,
+        map_state: &MapState,
+        map_renderer: &mut MapRenderer,
+        inter_renderers: &mut InterRenderers,
+    ) {
         let tile_ids = tile_ids_in_view(map_state, &map_options.tiling);
         let center_tile_id = map_options
             .tiling
@@ -257,7 +263,7 @@ impl Layer for VectorTiledLayer {
             for tile_id in dirty_tiles {
                 self.vector_tiles.remove(&tile_id);
 
-                renderer.remove_layer_draw_item(&self.name, &tile_id);
+                map_renderer.remove_layer_draw_item(&self.name, &tile_id);
             }
         }
 
@@ -265,14 +271,16 @@ impl Layer for VectorTiledLayer {
             let tile_id = pair.key();
             let vector_tile = pair.value();
 
-            if !renderer.contains_layer_draw_item(&self.name, tile_id) {
+            if !map_renderer.contains_layer_draw_item(&self.name, tile_id) {
                 let drawable = VectorTileDrawable::new(
-                    renderer,
                     &vector_tile,
                     self.options.z,
                     &self.options.layers_shape_styles,
+                    &map_renderer,
+                    &inter_renderers,
                 );
-                renderer.add_layer_draw_item(&self.name, tile_id, drawable.into());
+
+                map_renderer.add_layer_draw_item(&self.name, tile_id, drawable.into());
             }
         }
     }

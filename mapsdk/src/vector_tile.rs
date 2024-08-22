@@ -7,11 +7,12 @@ use crate::feature::{Feature, Shape};
 
 #[derive(Debug, Clone)]
 pub struct VectorTile {
-    pub layers: BTreeMap<String, VectorTileLayer>,
+    bbox: Rect,
+    layers: BTreeMap<String, VectorTileLayer>,
 }
 
 impl VectorTile {
-    pub fn from_data(data: Vec<u8>, tile_bbox: &Rect) -> Result<Self, Box<dyn Error>> {
+    pub fn from_data(data: Vec<u8>, tile_bbox: Rect) -> Result<Self, Box<dyn Error>> {
         let reader = mvt_reader::Reader::new(data)?;
 
         let tile_x = tile_bbox.min().x as f32;
@@ -30,14 +31,16 @@ impl VectorTile {
                     .map(|f| {
                         let id = nanoid!();
 
-                        let geom = translate_vector_tile_geometry(
-                            &f.geometry,
-                            tile_x,
-                            tile_y,
-                            tile_x_factor,
-                            tile_y_factor,
-                        );
-                        let shape = Shape::Geometry(geom);
+                        // let geom = translate_vector_tile_geometry(
+                        //     &f.geometry,
+                        //     tile_x,
+                        //     tile_y,
+                        //     tile_x_factor,
+                        //     tile_y_factor,
+                        // );
+                        // let shape = Shape::Geometry(geom);
+
+                        let shape = Shape::Geometry(f.geometry);
 
                         let attrs = if let Some(properties) = f.properties {
                             Some(
@@ -58,7 +61,18 @@ impl VectorTile {
             layers.insert(name.to_string(), layer);
         }
 
-        Ok(Self { layers })
+        Ok(Self {
+            bbox: tile_bbox,
+            layers,
+        })
+    }
+
+    pub fn bbox(&self) -> Rect {
+        self.bbox
+    }
+
+    pub fn layers(&self) -> &BTreeMap<String, VectorTileLayer> {
+        &self.layers
     }
 }
 
@@ -213,7 +227,7 @@ mod tests {
 
         let vt = VectorTile::from_data(
             data,
-            &Rect::new(
+            Rect::new(
                 Coord {
                     x: -20037508.34278924,
                     y: -20037508.34278924,

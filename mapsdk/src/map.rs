@@ -11,8 +11,14 @@ use geo::Coord;
 use tokio::{sync::mpsc, task::JoinHandle, time::sleep};
 
 use crate::{
-    env, event::Event, layer::Layer, map::context::MapContext, render::Renderer, tiling::Tiling,
+    env,
+    event::Event,
+    layer::Layer,
+    map::context::MapContext,
+    render::{InterRenderers, MapRenderer, MapRendererOptions, VectorTileRenderer},
+    tiling::Tiling,
     utils::color::Color,
+    Canvas,
 };
 
 pub(crate) mod context;
@@ -38,10 +44,27 @@ impl Drop for Map {
 }
 
 impl Map {
-    pub fn new(options: &MapOptions) -> Self {
+    pub fn new(canvas: Canvas, options: &MapOptions) -> Self {
         let _ = env_logger::try_init();
 
-        let context = Arc::new(Mutex::new(MapContext::new(options)));
+        let map_renderer = pollster::block_on(MapRenderer::new(
+            canvas,
+            &MapRendererOptions::default()
+                .with_background_color(options.background_color.clone().into()),
+        ));
+
+        let vector_tile_renderer = pollster::block_on(VectorTileRenderer::new());
+
+        let inter_renderers = InterRenderers {
+            vector_tile_renderer,
+        };
+
+        let context = Arc::new(Mutex::new(MapContext::new(
+            options,
+            map_renderer,
+            inter_renderers,
+        )));
+
         let context_redraw_seq = Arc::new(AtomicU64::new(0));
         let redraw_seq = Arc::new(AtomicU64::new(0));
 
@@ -262,7 +285,7 @@ impl Map {
     }
 
     pub fn height(&self) -> Option<u32> {
-        Some(self.context.lock().ok()?.renderer.as_ref()?.height())
+        Some(self.context.lock().ok()?.map_renderer.height())
     }
 
     /// Jump to the given view, without an animated transition.
@@ -362,16 +385,6 @@ impl Map {
         self.request_redraw();
     }
 
-    pub fn set_renderer(&mut self, renderer: Renderer) {
-        {
-            if let Ok(mut context) = self.context.lock() {
-                context.renderer = Some(renderer);
-            }
-        }
-
-        self.request_redraw();
-    }
-
     pub fn to_map(&self, screen_coord: &Coord) -> Option<Coord> {
         self.context.lock().ok()?.to_map(screen_coord)
     }
@@ -381,7 +394,7 @@ impl Map {
     }
 
     pub fn width(&self) -> Option<u32> {
-        Some(self.context.lock().ok()?.renderer.as_ref()?.width())
+        Some(self.context.lock().ok()?.map_renderer.width())
     }
 
     pub fn yaw(&self) -> f64 {

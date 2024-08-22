@@ -3,20 +3,31 @@ use std::{collections::HashMap, time::Instant};
 use geo::{polygon, Coord, Polygon, Rect};
 use glam::{DQuat, DVec3};
 
-use crate::{layer::Layer, map::MapOptions, render::Renderer};
+use crate::{
+    layer::Layer,
+    map::MapOptions,
+    render::{InterRenderers, MapRenderer},
+};
 
 pub struct MapContext {
     pub map_options: MapOptions,
+
     pub state: MapState,
 
     pub layers: HashMap<String, Box<dyn Layer>>,
-    pub renderer: Option<Renderer>,
 
     pub animating: bool,
+
+    pub map_renderer: MapRenderer,
+    pub inter_renderers: InterRenderers,
 }
 
 impl MapContext {
-    pub fn new(map_options: &MapOptions) -> Self {
+    pub fn new(
+        map_options: &MapOptions,
+        map_renderer: MapRenderer,
+        inter_renderers: InterRenderers,
+    ) -> Self {
         let state = MapState {
             center: map_options.center.clone(),
             pitch: map_options.pitch,
@@ -28,12 +39,15 @@ impl MapContext {
 
         Self {
             map_options: map_options.clone(),
+
             state,
 
             layers: HashMap::new(),
-            renderer: None,
 
             animating: false,
+
+            map_renderer,
+            inter_renderers,
         }
     }
 
@@ -56,16 +70,20 @@ impl MapContext {
             self.state.view_bounds_seq = self.state.view_seq;
         }
 
-        if let Some(renderer) = &mut self.renderer {
-            if !self.animating {
-                for (id, layer) in &mut self.layers {
-                    log::debug!("Update layer [{}]", id);
-                    layer.update(&self.map_options, &self.state, renderer);
-                }
+        if !self.animating {
+            for (id, layer) in &mut self.layers {
+                log::debug!("Update layer [{}]", id);
+                layer.update(
+                    &self.map_options,
+                    &self.state,
+                    &mut self.map_renderer,
+                    &mut self.inter_renderers,
+                );
             }
-
-            renderer.render(&self.state);
         }
+
+        self.map_renderer
+            .render(&self.state, &mut self.inter_renderers);
 
         log::info!(
             "MapContext::redraw(update+render) elapsed: {:?}",
@@ -77,9 +95,8 @@ impl MapContext {
         self.state.map_res_ratio =
             self.map_options.tiling.tile_size() as f64 / width.min(height) as f64;
 
-        if let Some(renderer) = &mut self.renderer {
-            renderer.resize(width, height, &self.state);
-        }
+        self.map_renderer
+            .resize(width, height, &self.state, &mut self.inter_renderers);
 
         self.state.view_seq += 1;
     }
@@ -93,9 +110,8 @@ impl MapContext {
         self.state.pitch = pitch;
         self.state.yaw = yaw;
 
-        if let Some(renderer) = &mut self.renderer {
-            renderer.set_pitch_yaw(pitch, yaw, &self.state);
-        }
+        self.map_renderer
+            .set_pitch_yaw(pitch, yaw, &self.state, &mut self.inter_renderers);
 
         self.state.view_seq += 1;
     }
@@ -125,8 +141,8 @@ impl MapContext {
     }
 
     pub fn to_map(&self, screen_coord: &Coord) -> Option<Coord> {
-        let screen_center_x = self.renderer.as_ref()?.width() as f64 / 2.0;
-        let screen_center_y = self.renderer.as_ref()?.height() as f64 / 2.0;
+        let screen_center_x = self.map_renderer.width() as f64 / 2.0;
+        let screen_center_y = self.map_renderer.height() as f64 / 2.0;
 
         let v0 = DVec3::new(
             screen_coord.x - screen_center_x,
@@ -136,8 +152,8 @@ impl MapContext {
         let v1 = DQuat::from_axis_angle(DVec3::X, self.state.pitch.to_radians()) * v0;
         let v2 = DQuat::from_axis_angle(DVec3::Z, self.state.yaw.to_radians()) * v1;
 
-        let target = self.renderer.as_ref()?.camera().target().as_dvec3();
-        let eye = self.renderer.as_ref()?.camera().eye().as_dvec3();
+        let target = self.map_renderer.camera().target().as_dvec3();
+        let eye = self.map_renderer.camera().eye().as_dvec3();
 
         let v = target + v2;
 
@@ -174,8 +190,8 @@ impl MapContext {
             0.0,
         );
 
-        let target = self.renderer.as_ref()?.camera().target().as_dvec3();
-        let eye = self.renderer.as_ref()?.camera().eye().as_dvec3();
+        let target = self.map_renderer.camera().target().as_dvec3();
+        let eye = self.map_renderer.camera().eye().as_dvec3();
 
         // Ray-Plane Intersection
         // Reference: https://www.cs.princeton.edu/courses/archive/fall00/cs426/lectures/raycast/sld017.htm
@@ -187,8 +203,8 @@ impl MapContext {
         let v1 = DQuat::from_axis_angle(DVec3::Z, -self.state.yaw.to_radians()) * v0;
         let v2 = DQuat::from_axis_angle(DVec3::X, -self.state.pitch.to_radians()) * v1;
 
-        let screen_center_x = self.renderer.as_ref()?.width() as f64 / 2.0;
-        let screen_center_y = self.renderer.as_ref()?.height() as f64 / 2.0;
+        let screen_center_x = self.map_renderer.width() as f64 / 2.0;
+        let screen_center_y = self.map_renderer.height() as f64 / 2.0;
 
         let screen_coord = Coord {
             x: screen_center_x + v2.x as f64,
@@ -230,8 +246,8 @@ impl MapContext {
         let center = self.state.center;
         let map_res = self.state.zoom_res * self.state.map_res_ratio;
 
-        let hw = self.renderer.as_ref()?.width() as f64 / 2.0;
-        let hh = self.renderer.as_ref()?.height() as f64 / 2.0;
+        let hw = self.map_renderer.width() as f64 / 2.0;
+        let hh = self.map_renderer.height() as f64 / 2.0;
 
         let r = DQuat::from_axis_angle(DVec3::Z, self.state.yaw.to_radians());
 

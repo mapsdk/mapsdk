@@ -14,16 +14,22 @@ mapsdk = "0.1.0"
 
 use std::fmt::Debug;
 
+use crate::render::targets::Window;
+
 pub mod feature;
 pub mod layer;
 pub mod map;
-pub mod render;
 pub mod tiling;
 pub mod utils;
 pub mod vector_tile;
 
 pub(crate) mod env;
 pub(crate) mod event;
+pub(crate) mod render;
+
+pub enum Canvas {
+    Window(Window),
+}
 
 pub type JsonValue = serde_json::value::Value;
 

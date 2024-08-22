@@ -14,7 +14,7 @@ use crate::{
             buffer::VertexIndexBuffer,
         },
         tessellation::{circle::tessellate_circle, geometry::tessellate_geometry, Tessellations},
-        DrawItem, MapState, Renderer,
+        DrawItem, InterRenderers, MapRenderer, MapRenderingContext, MapState,
     },
 };
 
@@ -30,8 +30,13 @@ pub struct FeatureDrawable {
 }
 
 impl FeatureDrawable {
-    pub fn new(renderer: &Renderer, feature: &Feature, z: f64, shape_styles: &ShapeStyles) -> Self {
-        let rendering_context = &renderer.rendering_context;
+    pub fn new(
+        map_renderer: &MapRenderer,
+        feature: &Feature,
+        z: f64,
+        shape_styles: &ShapeStyles,
+    ) -> Self {
+        let MapRenderingContext { device, .. } = &map_renderer.rendering_context;
 
         let tessellations = match feature.shape() {
             Shape::Circle { center, radius } => tessellate_circle(center, *radius as f32, 6),
@@ -42,16 +47,13 @@ impl FeatureDrawable {
         let mut stroke_buffers: Vec<VertexIndexBuffer> = Vec::new();
 
         for fill_vertex_index in &tessellations.fills {
-            let buffers =
-                VertexIndexBuffer::from_fill_vertex_index(&rendering_context, &fill_vertex_index);
+            let buffers = VertexIndexBuffer::from_fill_vertex_index(&device, &fill_vertex_index);
             fill_buffers.push(buffers);
         }
 
         for stroke_vertex_index in &tessellations.strokes {
-            let buffers = VertexIndexBuffer::from_stroke_vertex_index(
-                &rendering_context,
-                &stroke_vertex_index,
-            );
+            let buffers =
+                VertexIndexBuffer::from_stroke_vertex_index(&device, &stroke_vertex_index);
             stroke_buffers.push(buffers);
         }
 
@@ -69,29 +71,39 @@ impl FeatureDrawable {
 }
 
 impl Drawable for FeatureDrawable {
-    fn draw(&self, map_state: &MapState, renderer: &Renderer, render_pass: &mut RenderPass) {
-        let rendering_context = &renderer.rendering_context;
-        let rendering_resources = &renderer.rendering_resources;
+    fn draw(
+        &mut self,
+        map_state: &MapState,
+        map_renderer: &MapRenderer,
+        _inter_renderers: &InterRenderers,
+        render_pass: &mut RenderPass,
+    ) {
+        let MapRenderingContext {
+            device,
+            pixel_ratio,
 
-        let map_view_bgl = create_map_view_bgl(rendering_context);
-        let map_view_bg = create_map_view_bg(
-            rendering_context,
-            &map_view_bgl,
-            &renderer.camera,
-            &map_state,
-        );
+            shape_fill_pipeline,
+            shape_stroke_pipeline,
+            symbol_circle_pipeline,
+            ..
+        } = &map_renderer.rendering_context;
+
+        let map_view_bgl = create_map_view_bgl(device);
+        let map_view_bg =
+            create_map_view_bg(device, &map_view_bgl, &map_renderer.camera, &map_state);
 
         if self.feature.shape().is_points() {
-            let symbol_circle_params_bgl = create_symbol_circle_params_bgl(rendering_context);
+            let symbol_circle_params_bgl = create_symbol_circle_params_bgl(device);
             let symbol_circle_params_bg = create_symbol_circle_params_bg(
-                rendering_context,
+                device,
+                *pixel_ratio as f32,
                 &symbol_circle_params_bgl,
                 self.z,
                 &self.shape_styles,
             );
 
             for fill_buffer in &self.fill_buffers {
-                render_pass.set_pipeline(&rendering_resources.symbol_circle_pipeline);
+                render_pass.set_pipeline(&symbol_circle_pipeline);
                 render_pass.set_bind_group(0, &map_view_bg, &[]);
                 render_pass.set_bind_group(1, &symbol_circle_params_bg, &[]);
                 render_pass.set_vertex_buffer(0, fill_buffer.vertex_buffer.slice(..));
@@ -101,16 +113,16 @@ impl Drawable for FeatureDrawable {
             }
         } else {
             if self.shape_styles.fill_enabled {
-                let shape_fill_params_bgl = create_shape_fill_params_bgl(rendering_context);
+                let shape_fill_params_bgl = create_shape_fill_params_bgl(device);
                 let shape_fill_params_bg = create_shape_fill_params_bg(
-                    rendering_context,
+                    device,
                     &shape_fill_params_bgl,
                     self.z,
                     &self.shape_styles,
                 );
 
                 for fill_buffer in &self.fill_buffers {
-                    render_pass.set_pipeline(&rendering_resources.shape_fill_pipeline);
+                    render_pass.set_pipeline(&shape_fill_pipeline);
                     render_pass.set_bind_group(0, &map_view_bg, &[]);
                     render_pass.set_bind_group(1, &shape_fill_params_bg, &[]);
                     render_pass.set_vertex_buffer(0, fill_buffer.vertex_buffer.slice(..));
@@ -127,9 +139,10 @@ impl Drawable for FeatureDrawable {
                     1
                 };
 
-                let shape_stroke_params_bgl = create_shape_stroke_params_bgl(rendering_context);
+                let shape_stroke_params_bgl = create_shape_stroke_params_bgl(device);
                 let shape_stroke_params_bg = create_shape_stroke_params_bg(
-                    rendering_context,
+                    device,
+                    *pixel_ratio as f32,
                     &shape_stroke_params_bgl,
                     self.z,
                     align,
@@ -137,7 +150,7 @@ impl Drawable for FeatureDrawable {
                 );
 
                 for stroke_buffer in &self.stroke_buffers {
-                    render_pass.set_pipeline(&rendering_resources.shape_stroke_pipeline);
+                    render_pass.set_pipeline(&shape_stroke_pipeline);
                     render_pass.set_bind_group(0, &map_view_bg, &[]);
                     render_pass.set_bind_group(1, &shape_stroke_params_bg, &[]);
                     render_pass.set_vertex_buffer(0, stroke_buffer.vertex_buffer.slice(..));

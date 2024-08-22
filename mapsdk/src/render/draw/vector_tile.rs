@@ -3,41 +3,46 @@ use wgpu::*;
 use crate::{
     feature::{style::ShapeStyles, Shape},
     render::{
-        create_map_view_bg, create_map_view_bgl, create_shape_fill_params_bg,
-        create_shape_fill_params_bgl, create_shape_stroke_params_bg,
-        create_shape_stroke_params_bgl, create_symbol_circle_params_bg,
-        create_symbol_circle_params_bgl,
+        create_image_params_bg, create_image_params_bgl, create_image_texture_bg,
+        create_image_texture_bgl, create_map_view_bg, create_map_view_bgl,
         draw::Drawable,
-        resources::buffer::{
-            create_index_buffer_from_u16_slice, create_vertex_buffer_from_vec2_f32_slice,
-            create_vertex_buffer_from_vec7_f32_slice,
+        resources::{
+            buffer::{
+                create_index_buffer_from_u16_slice, create_vertex_buffer_from_vec2_f32_slice,
+                create_vertex_buffer_from_vec7_f32_slice,
+            },
+            texture::create_texture,
         },
         tessellation::{circle::tessellate_circle, geometry::tessellate_geometry},
-        DrawItem, MapState, Renderer,
+        DrawItem, InterRenderers, MapRenderer, MapRenderingContext, MapState,
     },
     vector_tile::VectorTile,
 };
 
 pub struct VectorTileDrawable {
-    layers_shape_styles: Vec<(String, ShapeStyles)>,
-    z: f32,
+    pub z: f32,
+    pub layers_shape_styles: Vec<(String, ShapeStyles)>,
 
-    fill_vertex_buffer: Buffer,
-    fill_index_buffer: Buffer,
-    stroke_vertex_buffer: Buffer,
-    stroke_index_buffer: Buffer,
-    feature_metas: Vec<VectorTileFeatureMeta>,
+    pub fill_vertex_buffer: Buffer,
+    pub fill_index_buffer: Buffer,
+    pub stroke_vertex_buffer: Buffer,
+    pub stroke_index_buffer: Buffer,
+    pub feature_metas: Vec<VectorTileFeatureMeta>,
+
+    pub texture_view: TextureView,
+    pub texture_updated_zoom_res: f64,
+    pub texture_vertex_buffer: Buffer,
+    pub texture_index_buffer: Buffer,
 }
 
 impl VectorTileDrawable {
     pub fn new(
-        renderer: &Renderer,
         vector_tile: &VectorTile,
         z: f64,
         layers_shape_styles: &Vec<(String, ShapeStyles)>,
+        map_renderer: &MapRenderer,
+        inter_renderers: &InterRenderers,
     ) -> Self {
-        let rendering_context = &renderer.rendering_context;
-
         let mut fill_vertices: Vec<[f32; 2]> = Vec::new();
         let mut fill_indices: Vec<u16> = Vec::new();
         let mut stroke_vertices: Vec<[f32; 7]> = Vec::new();
@@ -50,7 +55,7 @@ impl VectorTileDrawable {
         let mut stroke_index_start: u32 = 0;
 
         for (shape_styles_index, (layer_name, _)) in layers_shape_styles.iter().enumerate() {
-            if let Some(layer) = &vector_tile.layers.get(layer_name) {
+            if let Some(layer) = &vector_tile.layers().get(layer_name) {
                 for feature in &layer.features {
                     let shape = feature.shape();
 
@@ -104,184 +109,107 @@ impl VectorTileDrawable {
             }
         }
 
-        let fill_vertex_buffer = create_vertex_buffer_from_vec2_f32_slice(
-            rendering_context,
-            "Fill Vertex Buffer",
-            &fill_vertices,
-        );
-        let fill_index_buffer = create_index_buffer_from_u16_slice(
-            rendering_context,
-            "Fill Index Buffer",
-            &fill_indices,
-        );
+        let device = &map_renderer.rendering_context.device;
+
+        let fill_vertex_buffer =
+            create_vertex_buffer_from_vec2_f32_slice(&device, "Fill Vertex Buffer", &fill_vertices);
+        let fill_index_buffer =
+            create_index_buffer_from_u16_slice(&device, "Fill Index Buffer", &fill_indices);
 
         let stroke_vertex_buffer = create_vertex_buffer_from_vec7_f32_slice(
-            rendering_context,
+            &device,
             "Stroke Vertex Buffer",
             &stroke_vertices,
         );
-        let stroke_index_buffer = create_index_buffer_from_u16_slice(
-            rendering_context,
-            "Stroke Index Buffer",
-            &stroke_indices,
+        let stroke_index_buffer =
+            create_index_buffer_from_u16_slice(&device, "Stroke Index Buffer", &stroke_indices);
+
+        let texture = create_texture(device, 4096);
+        let texture_view = texture.create_view(&TextureViewDescriptor::default());
+
+        let bbox = vector_tile.bbox();
+        let texture_vertices = [
+            [bbox.min().x as f32, bbox.max().y as f32],
+            [bbox.max().x as f32, bbox.max().y as f32],
+            [bbox.min().x as f32, bbox.min().y as f32],
+            [bbox.max().x as f32, bbox.min().y as f32],
+        ];
+        let texture_vertex_buffer = create_vertex_buffer_from_vec2_f32_slice(
+            &device,
+            "Vector Tile Texture VertexBuffer",
+            &texture_vertices,
+        );
+
+        let texture_indices: [u16; 4] = [0, 1, 2, 3];
+        let texture_index_buffer = create_index_buffer_from_u16_slice(
+            &device,
+            "Vector Tile Texture IndexBuffer",
+            &texture_indices,
         );
 
         Self {
-            layers_shape_styles: layers_shape_styles.clone(),
             z: z as f32,
+            layers_shape_styles: layers_shape_styles.clone(),
 
             fill_vertex_buffer,
             fill_index_buffer,
             stroke_vertex_buffer,
             stroke_index_buffer,
             feature_metas,
+
+            texture_view,
+            texture_updated_zoom_res: 0.0,
+            texture_vertex_buffer,
+            texture_index_buffer,
         }
     }
 }
 
 impl Drawable for VectorTileDrawable {
-    fn draw(&self, map_state: &MapState, renderer: &Renderer, render_pass: &mut RenderPass) {
-        let rendering_context = &renderer.rendering_context;
-        let rendering_resources = &renderer.rendering_resources;
+    fn draw(
+        &mut self,
+        map_state: &MapState,
+        map_renderer: &MapRenderer,
+        inter_renderers: &InterRenderers,
+        render_pass: &mut RenderPass,
+    ) {
+        // Update texture if needed
+        if self.texture_updated_zoom_res != map_state.zoom_res {
+            inter_renderers
+                .vector_tile_renderer
+                .render(map_renderer, self);
+            self.texture_updated_zoom_res = map_state.zoom_res;
+        }
 
-        let map_view_bgl = create_map_view_bgl(rendering_context);
-        let map_view_bg = create_map_view_bg(
-            rendering_context,
-            &map_view_bgl,
-            &renderer.camera,
-            &map_state,
+        let MapRenderingContext {
+            device,
+            color_sampler,
+            image_pipeline,
+            ..
+        } = &map_renderer.rendering_context;
+
+        let map_view_bgl = create_map_view_bgl(device);
+        let map_view_bg =
+            create_map_view_bg(device, &map_view_bgl, &map_renderer.camera, &map_state);
+
+        let image_texture_bgl = create_image_texture_bgl(device);
+        let image_texture_bg = create_image_texture_bg(
+            device,
+            &image_texture_bgl,
+            &self.texture_view,
+            &color_sampler,
         );
 
-        let symbol_circle_params_bgl = create_symbol_circle_params_bgl(rendering_context);
-        let shape_fill_params_bgl = create_shape_fill_params_bgl(rendering_context);
-        let shape_stroke_params_bgl = create_shape_stroke_params_bgl(rendering_context);
+        let image_params_bgl = create_image_params_bgl(device);
+        let image_params_bg = create_image_params_bg(device, &image_params_bgl, self.z);
 
-        // draw fills
-        {
-            render_pass.set_vertex_buffer(0, self.fill_vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.fill_index_buffer.slice(..), IndexFormat::Uint16);
-
-            {
-                render_pass.set_pipeline(&rendering_resources.shape_fill_pipeline);
-
-                for (shape_styles_index, (_, shape_styles)) in
-                    self.layers_shape_styles.iter().enumerate()
-                {
-                    if shape_styles.fill_enabled {
-                        let shape_fill_params_bg = create_shape_fill_params_bg(
-                            rendering_context,
-                            &shape_fill_params_bgl,
-                            self.z,
-                            &shape_styles,
-                        );
-
-                        render_pass.set_bind_group(0, &map_view_bg, &[]);
-                        render_pass.set_bind_group(1, &shape_fill_params_bg, &[]);
-
-                        for feature_meta in &self.feature_metas {
-                            if !feature_meta.shape_is_points
-                                && !feature_meta.shape_is_lines
-                                && feature_meta.shape_styles_index == shape_styles_index
-                            {
-                                for index in &feature_meta.fill_buffer_index {
-                                    render_pass.draw_indexed(index.0..index.1, index.2, 0..1);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            {
-                render_pass.set_pipeline(&rendering_resources.symbol_circle_pipeline);
-
-                for (shape_styles_index, (_, shape_styles)) in
-                    self.layers_shape_styles.iter().enumerate()
-                {
-                    if shape_styles.fill_enabled {
-                        let symbol_circle_params_bg = create_symbol_circle_params_bg(
-                            rendering_context,
-                            &symbol_circle_params_bgl,
-                            self.z,
-                            &shape_styles,
-                        );
-
-                        render_pass.set_bind_group(0, &map_view_bg, &[]);
-                        render_pass.set_bind_group(1, &symbol_circle_params_bg, &[]);
-
-                        for feature_meta in &self.feature_metas {
-                            if feature_meta.shape_is_points
-                                && feature_meta.shape_styles_index == shape_styles_index
-                            {
-                                for index in &feature_meta.fill_buffer_index {
-                                    render_pass.draw_indexed(index.0..index.1, index.2, 0..1);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // draw strokes
-        {
-            render_pass.set_vertex_buffer(0, self.stroke_vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.stroke_index_buffer.slice(..), IndexFormat::Uint16);
-
-            {
-                render_pass.set_pipeline(&rendering_resources.shape_stroke_pipeline);
-
-                for (shape_styles_index, (_, shape_styles)) in
-                    self.layers_shape_styles.iter().enumerate()
-                {
-                    if shape_styles.stroke_enabled {
-                        {
-                            let shape_stroke_params_bg = create_shape_stroke_params_bg(
-                                rendering_context,
-                                &shape_stroke_params_bgl,
-                                self.z,
-                                0,
-                                &shape_styles,
-                            );
-
-                            render_pass.set_bind_group(0, &map_view_bg, &[]);
-                            render_pass.set_bind_group(1, &shape_stroke_params_bg, &[]);
-
-                            for feature_meta in &self.feature_metas {
-                                if feature_meta.shape_is_lines
-                                    && feature_meta.shape_styles_index == shape_styles_index
-                                {
-                                    for index in &feature_meta.stroke_buffer_index {
-                                        render_pass.draw_indexed(index.0..index.1, index.2, 0..1);
-                                    }
-                                }
-                            }
-                        }
-
-                        {
-                            let shape_stroke_params_bg = create_shape_stroke_params_bg(
-                                rendering_context,
-                                &shape_stroke_params_bgl,
-                                self.z,
-                                1,
-                                &shape_styles,
-                            );
-
-                            render_pass.set_bind_group(0, &map_view_bg, &[]);
-                            render_pass.set_bind_group(1, &shape_stroke_params_bg, &[]);
-
-                            for feature_meta in &self.feature_metas {
-                                if feature_meta.shape_styles_index == shape_styles_index {
-                                    for index in &feature_meta.stroke_buffer_index {
-                                        render_pass.draw_indexed(index.0..index.1, index.2, 0..1);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        render_pass.set_pipeline(&image_pipeline);
+        render_pass.set_bind_group(0, &map_view_bg, &[]);
+        render_pass.set_bind_group(1, &image_texture_bg, &[]);
+        render_pass.set_bind_group(2, &image_params_bg, &[]);
+        render_pass.set_vertex_buffer(0, self.texture_vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.texture_index_buffer.slice(..), IndexFormat::Uint16);
+        render_pass.draw_indexed(0..4, 0, 0..1);
     }
 }
 
@@ -291,11 +219,11 @@ impl Into<DrawItem> for VectorTileDrawable {
     }
 }
 
-struct VectorTileFeatureMeta {
-    shape_is_points: bool,
-    shape_is_lines: bool,
-    shape_styles_index: usize,
+pub struct VectorTileFeatureMeta {
+    pub shape_is_points: bool,
+    pub shape_is_lines: bool,
+    pub shape_styles_index: usize,
 
-    fill_buffer_index: Vec<(u32, u32, i32)>,
-    stroke_buffer_index: Vec<(u32, u32, i32)>,
+    pub fill_buffer_index: Vec<(u32, u32, i32)>,
+    pub stroke_buffer_index: Vec<(u32, u32, i32)>,
 }

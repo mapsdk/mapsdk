@@ -1,13 +1,7 @@
 use image::DynamicImage;
 use wgpu::*;
 
-use crate::render::RenderingContext;
-
-pub fn create_depth_texture(
-    rendering_context: &RenderingContext,
-    width: u32,
-    height: u32,
-) -> Texture {
+pub fn create_depth_texture(device: &Device, width: u32, height: u32) -> Texture {
     let texture_size = Extent3d {
         width,
         height,
@@ -27,13 +21,34 @@ pub fn create_depth_texture(
         view_formats: &[],
     };
 
-    rendering_context.device.create_texture(&texture_desc)
+    device.create_texture(&texture_desc)
 }
 
-pub fn create_texture_from_image(
-    rendering_context: &RenderingContext,
-    image: &DynamicImage,
-) -> Texture {
+pub fn create_texture(device: &Device, size: u32) -> Texture {
+    let texture_size = Extent3d {
+        width: size,
+        height: size,
+        depth_or_array_layers: 1,
+    };
+
+    let texture_desc = TextureDescriptor {
+        label: Some("Texture"),
+        size: texture_size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format: TextureFormat::Rgba8UnormSrgb,
+        usage: TextureUsages::TEXTURE_BINDING
+            | TextureUsages::COPY_DST
+            | TextureUsages::COPY_SRC
+            | TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+    };
+
+    device.create_texture(&texture_desc)
+}
+
+pub fn create_texture_from_image(device: &Device, image: &DynamicImage) -> Texture {
     let texture_size = Extent3d {
         width: image.width(),
         height: image.height(),
@@ -51,5 +66,5 @@ pub fn create_texture_from_image(
         view_formats: &[],
     };
 
-    rendering_context.device.create_texture(&texture_desc)
+    device.create_texture(&texture_desc)
 }

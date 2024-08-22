@@ -3,10 +3,7 @@ use wgpu::{
     *,
 };
 
-use crate::render::{
-    tessellation::{FillVertexIndex, StrokeVertexIndex},
-    RenderingContext,
-};
+use crate::render::tessellation::{FillVertexIndex, StrokeVertexIndex};
 
 pub struct VertexIndexBuffer {
     pub vertex_buffer: Buffer,
@@ -15,18 +12,15 @@ pub struct VertexIndexBuffer {
 }
 
 impl VertexIndexBuffer {
-    pub fn from_fill_vertex_index(
-        rendering_context: &RenderingContext,
-        fill_vertex_index: &FillVertexIndex,
-    ) -> Self {
+    pub fn from_fill_vertex_index(device: &Device, fill_vertex_index: &FillVertexIndex) -> Self {
         let vertex_buffer = create_vertex_buffer_from_vec2_f32_slice(
-            rendering_context,
+            device,
             "Fill VertexBuffer",
             &fill_vertex_index.vertices,
         );
 
         let index_buffer = create_index_buffer_from_u16_slice(
-            rendering_context,
+            device,
             "Fill IndexBuffer",
             &fill_vertex_index.indices,
         );
@@ -38,17 +32,17 @@ impl VertexIndexBuffer {
         }
     }
     pub fn from_stroke_vertex_index(
-        rendering_context: &RenderingContext,
+        device: &Device,
         stroke_vertex_index: &StrokeVertexIndex,
     ) -> Self {
         let vertex_buffer = create_vertex_buffer_from_vec7_f32_slice(
-            rendering_context,
+            device,
             "Stroke VertexBuffer",
             &stroke_vertex_index.vertices,
         );
 
         let index_buffer = create_index_buffer_from_u16_slice(
-            rendering_context,
+            device,
             "Stroke IndexBuffer",
             &stroke_vertex_index.indices,
         );
@@ -61,100 +55,74 @@ impl VertexIndexBuffer {
     }
 }
 
-pub fn create_index_buffer_from_u16_slice(
-    rendering_context: &RenderingContext,
-    label: &str,
-    slice: &[u16],
-) -> Buffer {
-    rendering_context
-        .device
-        .create_buffer_init(&BufferInitDescriptor {
-            label: Some(label),
-            contents: bytemuck::cast_slice(&slice),
-            usage: BufferUsages::INDEX,
-        })
+pub fn create_index_buffer_from_u16_slice(device: &Device, label: &str, slice: &[u16]) -> Buffer {
+    device.create_buffer_init(&BufferInitDescriptor {
+        label: Some(label),
+        contents: bytemuck::cast_slice(&slice),
+        usage: BufferUsages::INDEX,
+    })
 }
 
-pub fn create_uniform_buffer_from_f32_slice(
-    rendering_context: &RenderingContext,
-    label: &str,
-    slice: &[f32],
-) -> Buffer {
-    rendering_context
-        .device
-        .create_buffer_init(&BufferInitDescriptor {
-            label: Some(label),
-            contents: bytemuck::cast_slice(&slice),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        })
+pub fn create_uniform_buffer_from_f32_slice(device: &Device, label: &str, slice: &[f32]) -> Buffer {
+    device.create_buffer_init(&BufferInitDescriptor {
+        label: Some(label),
+        contents: bytemuck::cast_slice(&slice),
+        usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+    })
 }
 
-pub fn create_uniform_buffer_from_u32_slice(
-    rendering_context: &RenderingContext,
-    label: &str,
-    slice: &[u32],
-) -> Buffer {
-    rendering_context
-        .device
-        .create_buffer_init(&BufferInitDescriptor {
-            label: Some(label),
-            contents: bytemuck::cast_slice(&slice),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        })
+pub fn create_uniform_buffer_from_u32_slice(device: &Device, label: &str, slice: &[u32]) -> Buffer {
+    device.create_buffer_init(&BufferInitDescriptor {
+        label: Some(label),
+        contents: bytemuck::cast_slice(&slice),
+        usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+    })
 }
 
 pub fn create_uniform_buffer_from_vec4_f32_slice(
-    rendering_context: &RenderingContext,
+    device: &Device,
     label: &str,
     slice: &[[f32; 4]],
 ) -> Buffer {
-    rendering_context
-        .device
-        .create_buffer_init(&BufferInitDescriptor {
-            label: Some(label),
-            contents: bytemuck::cast_slice(&slice),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        })
+    device.create_buffer_init(&BufferInitDescriptor {
+        label: Some(label),
+        contents: bytemuck::cast_slice(&slice),
+        usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+    })
 }
 
 pub fn create_vertex_buffer_from_vec2_f32_slice(
-    rendering_context: &RenderingContext,
+    device: &Device,
     label: &str,
     slice: &[[f32; 2]],
 ) -> Buffer {
-    rendering_context
-        .device
-        .create_buffer_init(&BufferInitDescriptor {
-            label: Some(label),
-            contents: bytemuck::cast_slice(&slice),
-            usage: BufferUsages::VERTEX,
-        })
+    device.create_buffer_init(&BufferInitDescriptor {
+        label: Some(label),
+        contents: bytemuck::cast_slice(&slice),
+        usage: BufferUsages::VERTEX,
+    })
 }
 
 pub fn create_vertex_buffer_from_vec4_f32_slice(
-    rendering_context: &RenderingContext,
+    device: &Device,
     label: &str,
     slice: &[[f32; 4]],
 ) -> Buffer {
-    rendering_context
-        .device
-        .create_buffer_init(&BufferInitDescriptor {
-            label: Some(label),
-            contents: bytemuck::cast_slice(&slice),
-            usage: BufferUsages::VERTEX,
-        })
+    device.create_buffer_init(&BufferInitDescriptor {
+        label: Some(label),
+        contents: bytemuck::cast_slice(&slice),
+        usage: BufferUsages::VERTEX,
+    })
 }
 
 pub fn create_vertex_buffer_from_vec7_f32_slice(
-    rendering_context: &RenderingContext,
+    device: &Device,
     label: &str,
     slice: &[[f32; 7]],
 ) -> Buffer {
-    rendering_context
-        .device
-        .create_buffer_init(&BufferInitDescriptor {
-            label: Some(label),
-            contents: bytemuck::cast_slice(&slice),
-            usage: BufferUsages::VERTEX,
-        })
+    device.create_buffer_init(&BufferInitDescriptor {
+        label: Some(label),
+        contents: bytemuck::cast_slice(&slice),
+        usage: BufferUsages::VERTEX,
+    })
 }

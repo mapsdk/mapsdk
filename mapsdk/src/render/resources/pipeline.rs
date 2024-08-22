@@ -8,24 +8,20 @@ use crate::render::{
         create_image_params_bgl, create_map_view_bgl, create_shape_fill_params_bgl,
         create_shape_stroke_params_bgl, create_symbol_circle_params_bgl,
     },
-    RenderingContext,
 };
 
-pub fn create_image_pipeline(rendering_context: &RenderingContext) -> RenderPipeline {
-    let RenderingContext {
-        device,
-        color_target_state,
-        ..
-    } = &rendering_context;
-
+pub fn create_image_pipeline(
+    device: &Device,
+    color_target_state: &ColorTargetState,
+) -> RenderPipeline {
     let shader = device.create_shader_module(ShaderModuleDescriptor {
         label: Some("Image Shader"),
         source: ShaderSource::Wgsl(Cow::Borrowed(include_str!("../wgsl/image.wgsl"))),
     });
 
-    let map_view_bgl = create_map_view_bgl(&rendering_context);
-    let image_texture_bgl = create_image_texture_bgl(&rendering_context);
-    let image_params_bgl = create_image_params_bgl(&rendering_context);
+    let map_view_bgl = create_map_view_bgl(device);
+    let image_texture_bgl = create_image_texture_bgl(device);
+    let image_params_bgl = create_image_params_bgl(device);
 
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("Image PipelineLayout"),
@@ -75,20 +71,17 @@ pub fn create_image_pipeline(rendering_context: &RenderingContext) -> RenderPipe
     })
 }
 
-pub fn create_shape_fill_pipeline(rendering_context: &RenderingContext) -> RenderPipeline {
-    let RenderingContext {
-        device,
-        color_target_state,
-        ..
-    } = &rendering_context;
-
+pub fn create_shape_fill_pipeline(
+    device: &Device,
+    color_target_state: &ColorTargetState,
+) -> RenderPipeline {
     let shader = device.create_shader_module(ShaderModuleDescriptor {
         label: Some("Shape Fill Shader"),
         source: ShaderSource::Wgsl(Cow::Borrowed(include_str!("../wgsl/shape_fill.wgsl"))),
     });
 
-    let map_view_bgl = create_map_view_bgl(&rendering_context);
-    let shape_fill_params_bgl = create_shape_fill_params_bgl(&rendering_context);
+    let map_view_bgl = create_map_view_bgl(device);
+    let shape_fill_params_bgl = create_shape_fill_params_bgl(device);
 
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("Shape Fill PipelineLayout"),
@@ -135,20 +128,17 @@ pub fn create_shape_fill_pipeline(rendering_context: &RenderingContext) -> Rende
     })
 }
 
-pub fn create_shape_stroke_pipeline(rendering_context: &RenderingContext) -> RenderPipeline {
-    let RenderingContext {
-        device,
-        color_target_state,
-        ..
-    } = &rendering_context;
-
+pub fn create_shape_stroke_pipeline(
+    device: &Device,
+    color_target_state: &ColorTargetState,
+) -> RenderPipeline {
     let shader = device.create_shader_module(ShaderModuleDescriptor {
         label: Some("Shape Stroke Shader"),
         source: ShaderSource::Wgsl(Cow::Borrowed(include_str!("../wgsl/shape_stroke.wgsl"))),
     });
 
-    let map_view_bgl = create_map_view_bgl(&rendering_context);
-    let shape_stroke_params_bgl = create_shape_stroke_params_bgl(&rendering_context);
+    let map_view_bgl = create_map_view_bgl(device);
+    let shape_stroke_params_bgl = create_shape_stroke_params_bgl(device);
 
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("Shape Stroke PipelineLayout"),
@@ -195,20 +185,17 @@ pub fn create_shape_stroke_pipeline(rendering_context: &RenderingContext) -> Ren
     })
 }
 
-pub fn create_symbol_circle_pipeline(rendering_context: &RenderingContext) -> RenderPipeline {
-    let RenderingContext {
-        device,
-        color_target_state,
-        ..
-    } = &rendering_context;
-
+pub fn create_symbol_circle_pipeline(
+    device: &Device,
+    color_target_state: &ColorTargetState,
+) -> RenderPipeline {
     let shader = device.create_shader_module(ShaderModuleDescriptor {
         label: Some("Symbol Circle Shader"),
         source: ShaderSource::Wgsl(Cow::Borrowed(include_str!("../wgsl/symbol_circle.wgsl"))),
     });
 
-    let map_view_bgl = create_map_view_bgl(&rendering_context);
-    let symbol_circle_params_bgl = create_symbol_circle_params_bgl(&rendering_context);
+    let map_view_bgl = create_map_view_bgl(device);
+    let symbol_circle_params_bgl = create_symbol_circle_params_bgl(device);
 
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("Symbol Circle PipelineLayout"),

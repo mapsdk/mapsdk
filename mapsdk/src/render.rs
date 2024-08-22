@@ -1,6 +1,7 @@
 use std::time::Instant;
 
 use dashmap::DashMap;
+use geo::Coord;
 use glam::{Quat, Vec3};
 use wgpu::*;
 
@@ -8,34 +9,34 @@ use crate::{
     map::context::MapState,
     render::{
         camera::Camera,
-        draw::DrawItem,
+        draw::{vector_tile::VectorTileDrawable, DrawItem},
         resources::{bind_group::*, pipeline::*, texture::create_depth_texture},
         targets::Window,
     },
     utils::size::PixelSize,
+    Canvas,
 };
 
-pub(crate) mod camera;
-pub(crate) mod draw;
-pub(crate) mod resources;
-pub(crate) mod targets;
-pub(crate) mod tessellation;
+pub mod camera;
+pub mod draw;
+pub mod resources;
+pub mod targets;
+pub mod tessellation;
 
-pub struct Renderer {
-    renderer_options: RendererOptions,
+pub struct MapRenderer {
+    renderer_options: MapRendererOptions,
 
     rendering_size: PixelSize,
-    rendering_context: RenderingContext,
-    rendering_resources: RenderingResources,
+    rendering_context: MapRenderingContext,
 
     camera: Camera,
     layer_draw_items: DashMap<String, DashMap<String, DrawItem>>,
 }
 
-impl Renderer {
-    pub async fn new(renderer_type: RendererType, renderer_options: &RendererOptions) -> Self {
-        match renderer_type {
-            RendererType::Window(window) => {
+impl MapRenderer {
+    pub async fn new(canvas: Canvas, renderer_options: &MapRendererOptions) -> Self {
+        match canvas {
+            Canvas::Window(window) => {
                 let width = window.width();
                 let height = window.height();
                 let pixel_ratio = window.scale_factor();
@@ -80,35 +81,42 @@ impl Renderer {
                     write_mask: ColorWrites::ALL,
                 };
 
-                let rendering_context = RenderingContext {
+                let color_sampler = device.create_sampler(&SamplerDescriptor {
+                    address_mode_u: AddressMode::ClampToEdge,
+                    address_mode_v: AddressMode::ClampToEdge,
+                    address_mode_w: AddressMode::ClampToEdge,
+                    mag_filter: FilterMode::Linear,
+                    min_filter: FilterMode::Nearest,
+                    mipmap_filter: FilterMode::Nearest,
+                    ..Default::default()
+                });
+
+                let depth_texture = create_depth_texture(&device, width, height);
+                let depth_texture_view =
+                    depth_texture.create_view(&TextureViewDescriptor::default());
+
+                let image_pipeline = create_image_pipeline(&device, &color_target_state);
+                let shape_fill_pipeline = create_shape_fill_pipeline(&device, &color_target_state);
+                let shape_stroke_pipeline =
+                    create_shape_stroke_pipeline(&device, &color_target_state);
+                let symbol_circle_pipeline =
+                    create_symbol_circle_pipeline(&device, &color_target_state);
+
+                let rendering_context = MapRenderingContext {
                     pixel_ratio,
                     surface,
                     adapter,
                     device,
                     queue,
+
                     color_target_state,
-                };
-
-                let depth_texture = create_depth_texture(&rendering_context, width, height);
-                let depth_texture_view =
-                    depth_texture.create_view(&TextureViewDescriptor::default());
-
-                let rendering_resources = RenderingResources {
-                    color_sampler: rendering_context.device.create_sampler(&SamplerDescriptor {
-                        address_mode_u: AddressMode::ClampToEdge,
-                        address_mode_v: AddressMode::ClampToEdge,
-                        address_mode_w: AddressMode::ClampToEdge,
-                        mag_filter: FilterMode::Linear,
-                        min_filter: FilterMode::Nearest,
-                        mipmap_filter: FilterMode::Nearest,
-                        ..Default::default()
-                    }),
+                    color_sampler,
                     depth_texture_view,
 
-                    image_pipeline: create_image_pipeline(&rendering_context),
-                    shape_fill_pipeline: create_shape_fill_pipeline(&rendering_context),
-                    shape_stroke_pipeline: create_shape_stroke_pipeline(&rendering_context),
-                    symbol_circle_pipeline: create_symbol_circle_pipeline(&rendering_context),
+                    image_pipeline,
+                    shape_fill_pipeline,
+                    shape_stroke_pipeline,
+                    symbol_circle_pipeline,
                 };
 
                 let mut camera = Camera::default();
@@ -120,7 +128,6 @@ impl Renderer {
 
                     rendering_size: PixelSize::new(width, height),
                     rendering_context,
-                    rendering_resources,
 
                     camera,
                     layer_draw_items: DashMap::new(),
@@ -170,10 +177,10 @@ impl Renderer {
         }
     }
 
-    pub fn render(&mut self, map_state: &MapState) {
+    pub fn render(&mut self, map_state: &MapState, inter_renderers: &InterRenderers) {
         let instant = Instant::now();
 
-        let RenderingContext {
+        let MapRenderingContext {
             surface,
             device,
             queue,
@@ -184,11 +191,12 @@ impl Renderer {
             let surface_view = surface_texture
                 .texture
                 .create_view(&TextureViewDescriptor::default());
-            let mut command_encoder =
-                device.create_command_encoder(&CommandEncoderDescriptor { label: None });
+            let mut command_encoder = device.create_command_encoder(&CommandEncoderDescriptor {
+                label: Some("Map CommandEncoder"),
+            });
             {
                 let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
-                    label: Some("Render Pass"),
+                    label: Some("Map RenderPass"),
                     color_attachments: &[Some(RenderPassColorAttachment {
                         view: &surface_view,
                         resolve_target: None,
@@ -197,26 +205,16 @@ impl Renderer {
                             store: StoreOp::Store,
                         },
                     })],
-                    // depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                    //     view: &self.rendering_resources.depth_texture_view,
-                    //     depth_ops: Some(Operations {
-                    //         load: LoadOp::Clear(1.0),
-                    //         store: StoreOp::Store,
-                    //     }),
-                    //     stencil_ops: None,
-                    // }),
                     depth_stencil_attachment: None,
                     timestamp_writes: None,
                     occlusion_query_set: None,
                 });
 
                 for layer_name in &map_state.layers_order {
-                    if let Some(layer_pair) = self.layer_draw_items.get(layer_name) {
-                        for draw_item_pair in layer_pair.value() {
-                            draw_item_pair
-                                .value()
-                                .draw(map_state, self, &mut render_pass);
-                        }
+                    if let Some(layer_pair) = self.layer_draw_items.get_mut(layer_name) {
+                        layer_pair.value().iter_mut().for_each(|mut draw_item| {
+                            draw_item.draw(map_state, &self, inter_renderers, &mut render_pass);
+                        });
                     }
                 }
             }
@@ -225,17 +223,23 @@ impl Renderer {
             surface_texture.present();
         }
 
-        log::info!("Renderer::render elapsed: {:?}", instant.elapsed());
+        log::info!("MapRenderer::render elapsed: {:?}", instant.elapsed());
     }
 
-    pub fn resize(&mut self, width: u32, height: u32, map_state: &MapState) {
+    pub fn resize(
+        &mut self,
+        width: u32,
+        height: u32,
+        map_state: &MapState,
+        inter_renderers: &InterRenderers,
+    ) {
         self.rendering_size.width = width;
         self.rendering_size.height = height;
 
         self.update_camera_size();
         self.update_camera_position(map_state.pitch, map_state.yaw);
 
-        let RenderingContext {
+        let MapRenderingContext {
             surface,
             adapter,
             device,
@@ -246,16 +250,22 @@ impl Renderer {
             surface.configure(&device, &config);
         }
 
-        let depth_texture = create_depth_texture(&self.rendering_context, width, height);
-        self.rendering_resources.depth_texture_view =
+        let depth_texture = create_depth_texture(&device, width, height);
+        self.rendering_context.depth_texture_view =
             depth_texture.create_view(&TextureViewDescriptor::default());
 
-        self.render(&map_state);
+        self.render(&map_state, inter_renderers);
     }
 
-    pub fn set_pitch_yaw(&mut self, pitch: f64, yaw: f64, map_state: &MapState) {
+    pub fn set_pitch_yaw(
+        &mut self,
+        pitch: f64,
+        yaw: f64,
+        map_state: &MapState,
+        inter_renderers: &InterRenderers,
+    ) {
         self.update_camera_position(pitch, yaw);
-        self.render(&map_state);
+        self.render(&map_state, inter_renderers);
     }
 
     fn update_camera_position(&mut self, pitch: f64, yaw: f64) {
@@ -284,11 +294,11 @@ impl Renderer {
 }
 
 #[derive(Clone)]
-pub struct RendererOptions {
+pub struct MapRendererOptions {
     background_color: Color,
 }
 
-impl Default for RendererOptions {
+impl Default for MapRendererOptions {
     fn default() -> Self {
         Self {
             background_color: Color {
@@ -301,18 +311,25 @@ impl Default for RendererOptions {
     }
 }
 
-impl RendererOptions {
+impl MapRendererOptions {
     pub fn with_background_color(mut self, v: Color) -> Self {
         self.background_color = v;
         self
     }
 }
 
-pub enum RendererType {
+pub enum MapRendererType {
     Window(Window),
 }
 
-pub(crate) struct RenderingResources {
+pub struct MapRenderingContext {
+    pixel_ratio: f64,
+    surface: Surface<'static>,
+    adapter: Adapter,
+    device: Device,
+    queue: Queue,
+
+    color_target_state: ColorTargetState,
     color_sampler: Sampler,
     depth_texture_view: TextureView,
 
@@ -322,11 +339,286 @@ pub(crate) struct RenderingResources {
     symbol_circle_pipeline: RenderPipeline,
 }
 
-pub(crate) struct RenderingContext {
-    pixel_ratio: f64,
-    surface: Surface<'static>,
-    adapter: Adapter,
+pub struct InterRenderers {
+    pub vector_tile_renderer: VectorTileRenderer,
+}
+
+pub struct VectorTileRenderer {
+    // rendering_context: VectorTileRenderingContext,
+    camera: Camera,
+    map_state: MapState,
+}
+
+impl VectorTileRenderer {
+    pub async fn new() -> Self {
+        let instance = Instance::default();
+
+        let adapter = instance
+            .request_adapter(&RequestAdapterOptions {
+                power_preference: PowerPreference::default(),
+                force_fallback_adapter: false,
+                ..Default::default()
+            })
+            .await
+            .expect("Failed to find adapter");
+
+        let (device, queue) = adapter
+            .request_device(
+                &DeviceDescriptor {
+                    required_features: Features::empty(),
+                    required_limits: if cfg!(target_arch = "wasm32") {
+                        Limits::downlevel_webgl2_defaults().using_resolution(adapter.limits())
+                    } else {
+                        Limits::default().using_resolution(adapter.limits())
+                    },
+                    memory_hints: Default::default(),
+                    label: None,
+                },
+                None,
+            )
+            .await
+            .expect("Failed to find device");
+
+        let color_target_state = ColorTargetState {
+            format: TextureFormat::Rgba8UnormSrgb,
+            blend: Some(BlendState::ALPHA_BLENDING),
+            write_mask: ColorWrites::ALL,
+        };
+
+        let shape_fill_pipeline = create_shape_fill_pipeline(&device, &color_target_state);
+        let shape_stroke_pipeline = create_shape_stroke_pipeline(&device, &color_target_state);
+        let symbol_circle_pipeline = create_symbol_circle_pipeline(&device, &color_target_state);
+
+        let rendering_context = VectorTileRenderingContext {
+            device,
+            queue,
+
+            shape_fill_pipeline,
+            shape_stroke_pipeline,
+            symbol_circle_pipeline,
+        };
+
+        let mut camera = Camera::default();
+        camera.set_eye(Vec3::new(2048.0, 2048.0, 2048.0));
+        camera.set_up(-Vec3::Y);
+
+        let mut map_state = MapState::default();
+        map_state.center = Coord {
+            x: 2048.0,
+            y: 2048.0,
+        };
+
+        Self {
+            // rendering_context,
+            camera,
+            map_state,
+        }
+    }
+
+    pub fn render(
+        &self,
+        map_renderer: &MapRenderer,
+        vector_tile_drawable: &mut VectorTileDrawable,
+    ) {
+        let instant = Instant::now();
+
+        let MapRenderingContext {
+            device,
+            queue,
+
+            shape_fill_pipeline,
+            shape_stroke_pipeline,
+            symbol_circle_pipeline,
+            ..
+        } = &map_renderer.rendering_context;
+
+        let mut command_encoder = device.create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("Vector Tile CommandEncoder"),
+        });
+        {
+            let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("Vector Tile RenderPass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &vector_tile_drawable.texture_view,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Clear(Color::TRANSPARENT),
+                        store: StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            let map_view_bgl = create_map_view_bgl(device);
+            let map_view_bg =
+                create_map_view_bg(device, &map_view_bgl, &self.camera, &self.map_state);
+
+            let symbol_circle_params_bgl = create_symbol_circle_params_bgl(device);
+            let shape_fill_params_bgl = create_shape_fill_params_bgl(device);
+            let shape_stroke_params_bgl = create_shape_stroke_params_bgl(device);
+
+            // draw fills
+            {
+                render_pass.set_vertex_buffer(0, vector_tile_drawable.fill_vertex_buffer.slice(..));
+                render_pass.set_index_buffer(
+                    vector_tile_drawable.fill_index_buffer.slice(..),
+                    IndexFormat::Uint16,
+                );
+
+                {
+                    render_pass.set_pipeline(&shape_fill_pipeline);
+
+                    for (shape_styles_index, (_, shape_styles)) in
+                        vector_tile_drawable.layers_shape_styles.iter().enumerate()
+                    {
+                        if shape_styles.fill_enabled {
+                            let shape_fill_params_bg = create_shape_fill_params_bg(
+                                device,
+                                &shape_fill_params_bgl,
+                                vector_tile_drawable.z,
+                                &shape_styles,
+                            );
+
+                            render_pass.set_bind_group(0, &map_view_bg, &[]);
+                            render_pass.set_bind_group(1, &shape_fill_params_bg, &[]);
+
+                            for feature_meta in &vector_tile_drawable.feature_metas {
+                                if !feature_meta.shape_is_points
+                                    && !feature_meta.shape_is_lines
+                                    && feature_meta.shape_styles_index == shape_styles_index
+                                {
+                                    for index in &feature_meta.fill_buffer_index {
+                                        render_pass.draw_indexed(index.0..index.1, index.2, 0..1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                {
+                    render_pass.set_pipeline(&symbol_circle_pipeline);
+
+                    for (shape_styles_index, (_, shape_styles)) in
+                        vector_tile_drawable.layers_shape_styles.iter().enumerate()
+                    {
+                        if shape_styles.fill_enabled {
+                            let symbol_circle_params_bg = create_symbol_circle_params_bg(
+                                device,
+                                1.0,
+                                &symbol_circle_params_bgl,
+                                vector_tile_drawable.z,
+                                &shape_styles,
+                            );
+
+                            render_pass.set_bind_group(0, &map_view_bg, &[]);
+                            render_pass.set_bind_group(1, &symbol_circle_params_bg, &[]);
+
+                            for feature_meta in &vector_tile_drawable.feature_metas {
+                                if feature_meta.shape_is_points
+                                    && feature_meta.shape_styles_index == shape_styles_index
+                                {
+                                    for index in &feature_meta.fill_buffer_index {
+                                        render_pass.draw_indexed(index.0..index.1, index.2, 0..1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // draw strokes
+            {
+                render_pass
+                    .set_vertex_buffer(0, vector_tile_drawable.stroke_vertex_buffer.slice(..));
+                render_pass.set_index_buffer(
+                    vector_tile_drawable.stroke_index_buffer.slice(..),
+                    IndexFormat::Uint16,
+                );
+
+                {
+                    render_pass.set_pipeline(&shape_stroke_pipeline);
+
+                    for (shape_styles_index, (_, shape_styles)) in
+                        vector_tile_drawable.layers_shape_styles.iter().enumerate()
+                    {
+                        if shape_styles.stroke_enabled {
+                            {
+                                let shape_stroke_params_bg = create_shape_stroke_params_bg(
+                                    device,
+                                    1.0,
+                                    &shape_stroke_params_bgl,
+                                    vector_tile_drawable.z,
+                                    0,
+                                    &shape_styles,
+                                );
+
+                                render_pass.set_bind_group(0, &map_view_bg, &[]);
+                                render_pass.set_bind_group(1, &shape_stroke_params_bg, &[]);
+
+                                for feature_meta in &vector_tile_drawable.feature_metas {
+                                    if feature_meta.shape_is_lines
+                                        && feature_meta.shape_styles_index == shape_styles_index
+                                    {
+                                        for index in &feature_meta.stroke_buffer_index {
+                                            render_pass.draw_indexed(
+                                                index.0..index.1,
+                                                index.2,
+                                                0..1,
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+
+                            {
+                                let shape_stroke_params_bg = create_shape_stroke_params_bg(
+                                    device,
+                                    1.0,
+                                    &shape_stroke_params_bgl,
+                                    vector_tile_drawable.z,
+                                    1,
+                                    &shape_styles,
+                                );
+
+                                render_pass.set_bind_group(0, &map_view_bg, &[]);
+                                render_pass.set_bind_group(1, &shape_stroke_params_bg, &[]);
+
+                                for feature_meta in &vector_tile_drawable.feature_metas {
+                                    if feature_meta.shape_styles_index == shape_styles_index {
+                                        for index in &feature_meta.stroke_buffer_index {
+                                            render_pass.draw_indexed(
+                                                index.0..index.1,
+                                                index.2,
+                                                0..1,
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        queue.submit(Some(command_encoder.finish()));
+
+        log::info!(
+            "VectorTileRenderer::render elapsed: {:?}",
+            instant.elapsed()
+        );
+    }
+}
+
+pub struct VectorTileRenderingContext {
     device: Device,
     queue: Queue,
-    color_target_state: ColorTargetState,
+
+    shape_fill_pipeline: RenderPipeline,
+    shape_stroke_pipeline: RenderPipeline,
+    symbol_circle_pipeline: RenderPipeline,
 }

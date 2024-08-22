@@ -1,7 +1,7 @@
 use crate::{
     event::Event,
     map::{context::MapState, Map, MapOptions},
-    render::Renderer,
+    render::{InterRenderers, MapRenderer},
 };
 
 pub mod feature_layer;
@@ -16,7 +16,13 @@ pub trait Layer: Send + Sync {
     fn on_add_to_map(&mut self, map: &Map);
     fn on_remove_from_map(&mut self, map: &Map);
     fn set_name(&mut self, name: &str);
-    fn update(&mut self, map_options: &MapOptions, map_state: &MapState, renderer: &mut Renderer);
+    fn update(
+        &mut self,
+        map_options: &MapOptions,
+        map_state: &MapState,
+        map_renderer: &mut MapRenderer,
+        inter_renderers: &mut InterRenderers,
+    );
 }
 
 pub enum LayerType {

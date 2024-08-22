@@ -13,7 +13,7 @@ use crate::{
         Event, Layer, LayerType,
     },
     map::{context::MapState, Map, MapOptions},
-    render::{draw::image::ImageDrawable, Renderer},
+    render::{draw::image::ImageDrawable, InterRenderers, MapRenderer},
     tiling::TileId,
     utils::http::{HttpPool, HttpRequest, HttpResponse},
 };
@@ -121,7 +121,13 @@ impl Layer for ImageTiledLayer {
         self.name = name.to_string();
     }
 
-    fn update(&mut self, map_options: &MapOptions, map_state: &MapState, renderer: &mut Renderer) {
+    fn update(
+        &mut self,
+        map_options: &MapOptions,
+        map_state: &MapState,
+        map_renderer: &mut MapRenderer,
+        _inter_renderers: &mut InterRenderers,
+    ) {
         let tile_ids = tile_ids_in_view(map_state, &map_options.tiling);
         let center_tile_id = map_options
             .tiling
@@ -250,7 +256,7 @@ impl Layer for ImageTiledLayer {
             for tile_id in dirty_tiles {
                 self.image_tiles.remove(&tile_id);
 
-                renderer.remove_layer_draw_item(&self.name, &tile_id);
+                map_renderer.remove_layer_draw_item(&self.name, &tile_id);
             }
         }
 
@@ -259,9 +265,10 @@ impl Layer for ImageTiledLayer {
             let image = pair.value();
 
             if let Some(bbox) = map_options.tiling.get_tile_bbox(&tile_id) {
-                if !renderer.contains_layer_draw_item(&self.name, tile_id) {
-                    let drawable = ImageDrawable::new(renderer, &image, &bbox, self.options.z);
-                    renderer.add_layer_draw_item(&self.name, tile_id, drawable.into());
+                if !map_renderer.contains_layer_draw_item(&self.name, tile_id) {
+                    let drawable = ImageDrawable::new(&map_renderer, &image, &bbox, self.options.z);
+
+                    map_renderer.add_layer_draw_item(&self.name, tile_id, drawable.into());
                 }
             }
         }

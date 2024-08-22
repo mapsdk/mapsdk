@@ -8,7 +8,7 @@ use crate::{
     feature::{style::ShapeStyles, Feature, Features},
     layer::{Layer, LayerType},
     map::{context::MapState, Map, MapOptions},
-    render::{draw::feature::FeatureDrawable, Renderer},
+    render::{draw::feature::FeatureDrawable, InterRenderers, MapRenderer},
 };
 
 pub struct FeatureLayer {
@@ -81,20 +81,22 @@ impl Layer for FeatureLayer {
         &mut self,
         _map_options: &MapOptions,
         _map_state: &MapState,
-        renderer: &mut Renderer,
+        map_renderer: &mut MapRenderer,
+        _inter_renderers: &mut InterRenderers,
     ) {
         for pair in self.features.iter() {
             let feature_id = pair.key();
             let feature = pair.value();
 
-            if !renderer.contains_layer_draw_item(&self.name, &feature_id) {
+            if !map_renderer.contains_layer_draw_item(&self.name, &feature_id) {
                 let drawable = FeatureDrawable::new(
-                    renderer,
+                    &map_renderer,
                     &feature,
                     self.options.z,
                     &self.options.shape_styles,
                 );
-                renderer.add_layer_draw_item(&self.name, &feature_id, drawable.into());
+
+                map_renderer.add_layer_draw_item(&self.name, &feature_id, drawable.into());
             }
         }
     }
