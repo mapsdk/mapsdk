@@ -103,18 +103,6 @@ pub fn create_vertex_buffer_from_vec2_f32_slice(
     })
 }
 
-pub fn create_vertex_buffer_from_vec4_f32_slice(
-    device: &Device,
-    label: &str,
-    slice: &[[f32; 4]],
-) -> Buffer {
-    device.create_buffer_init(&BufferInitDescriptor {
-        label: Some(label),
-        contents: bytemuck::cast_slice(&slice),
-        usage: BufferUsages::VERTEX,
-    })
-}
-
 pub fn create_vertex_buffer_from_vec7_f32_slice(
     device: &Device,
     label: &str,

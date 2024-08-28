@@ -12,7 +12,7 @@ use crate::render::{
         buffer::{create_index_buffer_from_u16_slice, create_vertex_buffer_from_vec2_f32_slice},
         texture::create_texture_from_image,
     },
-    DrawItem, InterRenderers, MapRenderer, MapRenderingContext, MapState,
+    DrawItem, InterRenderers, MapOptions, MapRenderer, MapRenderingContext, MapState,
 };
 
 pub struct ImageDrawable {
@@ -25,9 +25,14 @@ pub struct ImageDrawable {
 
 impl ImageDrawable {
     pub fn new(map_renderer: &MapRenderer, image: &DynamicImage, bbox: &Rect, z: f64) -> Self {
-        let MapRenderingContext { device, queue, .. } = &map_renderer.rendering_context;
+        let MapRenderingContext {
+            device,
+            queue,
+            color_target_state,
+            ..
+        } = &map_renderer.rendering_context;
 
-        let texture = create_texture_from_image(&device, image);
+        let texture = create_texture_from_image(&device, image, color_target_state.format);
         queue.write_texture(
             ImageCopyTexture {
                 texture: &texture,
@@ -77,6 +82,7 @@ impl ImageDrawable {
 impl Drawable for ImageDrawable {
     fn draw(
         &mut self,
+        _map_options: &MapOptions,
         map_state: &MapState,
         map_renderer: &MapRenderer,
         _inter_renderers: &InterRenderers,

@@ -11,8 +11,7 @@ use crate::{
 
 pub struct MapContext {
     pub map_options: MapOptions,
-
-    pub state: MapState,
+    pub map_state: MapState,
 
     pub layers: HashMap<String, Box<dyn Layer>>,
 
@@ -28,7 +27,7 @@ impl MapContext {
         map_renderer: MapRenderer,
         inter_renderers: InterRenderers,
     ) -> Self {
-        let state = MapState {
+        let map_state = MapState {
             center: map_options.center.clone(),
             pitch: map_options.pitch,
             yaw: map_options.yaw,
@@ -39,8 +38,7 @@ impl MapContext {
 
         Self {
             map_options: map_options.clone(),
-
-            state,
+            map_state,
 
             layers: HashMap::new(),
 
@@ -56,18 +54,18 @@ impl MapContext {
 
         log::debug!(
             "Redraw map, center: {:?}, zoom resolution: {:?}, map resolution ratio: {:?}, pitch: {:?}, yaw: {:?}",
-            self.state.center,
-            self.state.zoom_res,
-            self.state.map_res_ratio,
-            self.state.pitch,
-            self.state.yaw,
+            self.map_state.center,
+            self.map_state.zoom_res,
+            self.map_state.map_res_ratio,
+            self.map_state.pitch,
+            self.map_state.yaw,
         );
 
-        if self.state.view_bounds_seq != self.state.view_seq {
+        if self.map_state.view_bounds_seq != self.map_state.view_seq {
             if let Some(view_bounds) = self.calc_view_bounds() {
-                self.state.view_bounds = view_bounds;
+                self.map_state.view_bounds = view_bounds;
             }
-            self.state.view_bounds_seq = self.state.view_seq;
+            self.map_state.view_bounds_seq = self.map_state.view_seq;
         }
 
         if !self.animating {
@@ -75,15 +73,18 @@ impl MapContext {
                 log::debug!("Update layer [{}]", id);
                 layer.update(
                     &self.map_options,
-                    &self.state,
+                    &self.map_state,
                     &mut self.map_renderer,
                     &mut self.inter_renderers,
                 );
             }
         }
 
-        self.map_renderer
-            .render(&self.state, &mut self.inter_renderers);
+        self.map_renderer.render(
+            &self.map_options,
+            &self.map_state,
+            &mut self.inter_renderers,
+        );
 
         log::info!(
             "MapContext::redraw(update+render) elapsed: {:?}",
@@ -92,28 +93,38 @@ impl MapContext {
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
-        self.state.map_res_ratio =
+        self.map_state.map_res_ratio =
             self.map_options.tiling.tile_size() as f64 / width.min(height) as f64;
 
-        self.map_renderer
-            .resize(width, height, &self.state, &mut self.inter_renderers);
+        self.map_renderer.resize(
+            width,
+            height,
+            &self.map_options,
+            &self.map_state,
+            &mut self.inter_renderers,
+        );
 
-        self.state.view_seq += 1;
+        self.map_state.view_seq += 1;
     }
 
     pub fn set_center(&mut self, center: Coord) {
-        self.state.center = center;
-        self.state.view_seq += 1;
+        self.map_state.center = center;
+        self.map_state.view_seq += 1;
     }
 
     pub fn set_pitch_yaw(&mut self, pitch: f64, yaw: f64) {
-        self.state.pitch = pitch;
-        self.state.yaw = yaw;
+        self.map_state.pitch = pitch;
+        self.map_state.yaw = yaw;
 
-        self.map_renderer
-            .set_pitch_yaw(pitch, yaw, &self.state, &mut self.inter_renderers);
+        self.map_renderer.set_pitch_yaw(
+            pitch,
+            yaw,
+            &self.map_options,
+            &self.map_state,
+            &mut self.inter_renderers,
+        );
 
-        self.state.view_seq += 1;
+        self.map_state.view_seq += 1;
     }
 
     pub fn set_zoom_res(&mut self, zoom_res: f64, update_zoom: bool) {
@@ -132,12 +143,12 @@ impl MapContext {
             zoom_res.clamp(zoom_res_min, zoom_res_max)
         };
 
-        self.state.zoom_res = new_zoom_res;
+        self.map_state.zoom_res = new_zoom_res;
         if update_zoom {
-            self.state.zoom = self.map_options.tiling.get_closest_lower_zoom(new_zoom_res);
+            self.map_state.zoom = self.map_options.tiling.get_closest_lower_zoom(new_zoom_res);
         }
 
-        self.state.view_seq += 1;
+        self.map_state.view_seq += 1;
     }
 
     pub fn to_map(&self, screen_coord: &Coord) -> Option<Coord> {
@@ -149,8 +160,8 @@ impl MapContext {
             screen_center_y - screen_coord.y,
             0.0,
         );
-        let v1 = DQuat::from_axis_angle(DVec3::X, self.state.pitch.to_radians()) * v0;
-        let v2 = DQuat::from_axis_angle(DVec3::Z, self.state.yaw.to_radians()) * v1;
+        let v1 = DQuat::from_axis_angle(DVec3::X, self.map_state.pitch.to_radians()) * v0;
+        let v2 = DQuat::from_axis_angle(DVec3::Z, self.map_state.yaw.to_radians()) * v1;
 
         let target = self.map_renderer.camera().target().as_dvec3();
         let eye = self.map_renderer.camera().eye().as_dvec3();
@@ -163,8 +174,8 @@ impl MapContext {
         let t = (target.dot(DVec3::Z) - v.dot(DVec3::Z)) / ray.dot(DVec3::Z);
         let p = v + ray * t;
 
-        let map_center = self.state.center;
-        let map_res = self.state.zoom_res * self.state.map_res_ratio;
+        let map_center = self.map_state.center;
+        let map_res = self.map_state.zoom_res * self.map_state.map_res_ratio;
 
         let map_coord = map_center
             + Coord {
@@ -176,13 +187,13 @@ impl MapContext {
     }
 
     pub fn to_screen(&self, map_coord: &Coord) -> Option<Coord> {
-        let r0 = DQuat::from_axis_angle(DVec3::X, self.state.pitch.to_radians());
+        let r0 = DQuat::from_axis_angle(DVec3::X, self.map_state.pitch.to_radians());
         let s0 = r0 * DVec3::Z;
-        let r1 = DQuat::from_axis_angle(DVec3::Z, self.state.yaw.to_radians());
+        let r1 = DQuat::from_axis_angle(DVec3::Z, self.map_state.yaw.to_radians());
         let s1 = r1 * s0;
 
-        let map_center = self.state.center;
-        let map_res = self.state.zoom_res * self.state.map_res_ratio;
+        let map_center = self.map_state.center;
+        let map_res = self.map_state.zoom_res * self.map_state.map_res_ratio;
 
         let mp = DVec3::new(
             (map_coord.x - map_center.x) / map_res,
@@ -200,8 +211,8 @@ impl MapContext {
         let p = mp + ray * t;
 
         let v0 = p - target;
-        let v1 = DQuat::from_axis_angle(DVec3::Z, -self.state.yaw.to_radians()) * v0;
-        let v2 = DQuat::from_axis_angle(DVec3::X, -self.state.pitch.to_radians()) * v1;
+        let v1 = DQuat::from_axis_angle(DVec3::Z, -self.map_state.yaw.to_radians()) * v0;
+        let v2 = DQuat::from_axis_angle(DVec3::X, -self.map_state.pitch.to_radians()) * v1;
 
         let screen_center_x = self.map_renderer.width() as f64 / 2.0;
         let screen_center_y = self.map_renderer.height() as f64 / 2.0;
@@ -224,37 +235,37 @@ impl MapContext {
             .tiling
             .get_resolution(self.map_options.zoom_max);
 
-        let zoom_res = self.state.zoom_res;
+        let zoom_res = self.map_state.zoom_res;
         let new_zoom_res = (zoom_res / scalar).clamp(zoom_res_min, zoom_res_max);
 
-        self.state.zoom_res = new_zoom_res;
+        self.map_state.zoom_res = new_zoom_res;
         if new_zoom_res != zoom_res {
-            self.state.zoom = self.map_options.tiling.get_closest_lower_zoom(new_zoom_res);
+            self.map_state.zoom = self.map_options.tiling.get_closest_lower_zoom(new_zoom_res);
 
-            let center = self.state.center;
-            self.state.center = *coord + (center - *coord) * (new_zoom_res / zoom_res);
+            let center = self.map_state.center;
+            self.map_state.center = *coord + (center - *coord) * (new_zoom_res / zoom_res);
         } else if new_zoom_res == zoom_res_max && scalar < 1.0 {
-            let center = self.state.center;
+            let center = self.map_state.center;
             let origin_center = self.map_options.center;
-            self.state.center = center + (origin_center - center) * (1.0 - scalar).powf(0.5);
+            self.map_state.center = center + (origin_center - center) * (1.0 - scalar).powf(0.5);
         }
 
-        self.state.view_seq += 1;
+        self.map_state.view_seq += 1;
     }
 
     fn calc_view_bounds(&self) -> Option<Polygon> {
-        let center = self.state.center;
-        let map_res = self.state.zoom_res * self.state.map_res_ratio;
+        let center = self.map_state.center;
+        let map_res = self.map_state.zoom_res * self.map_state.map_res_ratio;
 
         let hw = self.map_renderer.width() as f64 / 2.0;
         let hh = self.map_renderer.height() as f64 / 2.0;
 
-        let r = DQuat::from_axis_angle(DVec3::Z, self.state.yaw.to_radians());
+        let r = DQuat::from_axis_angle(DVec3::Z, self.map_state.yaw.to_radians());
 
         let hd = (hw * hw + hh * hh).sqrt();
 
         let alpha = (hh / hd).atan();
-        let theta = alpha - self.state.pitch.to_radians();
+        let theta = alpha - self.map_state.pitch.to_radians();
 
         const MAX_FACTOR: f64 = 3.0;
         let factor = if theta > 0.0 {

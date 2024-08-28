@@ -24,7 +24,7 @@ pub fn create_depth_texture(device: &Device, width: u32, height: u32) -> Texture
     device.create_texture(&texture_desc)
 }
 
-pub fn create_texture(device: &Device, size: u32) -> Texture {
+pub fn create_texture(device: &Device, size: u32, format: TextureFormat) -> Texture {
     let texture_size = Extent3d {
         width: size,
         height: size,
@@ -37,7 +37,7 @@ pub fn create_texture(device: &Device, size: u32) -> Texture {
         mip_level_count: 1,
         sample_count: 1,
         dimension: TextureDimension::D2,
-        format: TextureFormat::Rgba8UnormSrgb,
+        format,
         usage: TextureUsages::TEXTURE_BINDING
             | TextureUsages::COPY_DST
             | TextureUsages::COPY_SRC
@@ -48,7 +48,11 @@ pub fn create_texture(device: &Device, size: u32) -> Texture {
     device.create_texture(&texture_desc)
 }
 
-pub fn create_texture_from_image(device: &Device, image: &DynamicImage) -> Texture {
+pub fn create_texture_from_image(
+    device: &Device,
+    image: &DynamicImage,
+    format: TextureFormat,
+) -> Texture {
     let texture_size = Extent3d {
         width: image.width(),
         height: image.height(),
@@ -61,7 +65,7 @@ pub fn create_texture_from_image(device: &Device, image: &DynamicImage) -> Textu
         mip_level_count: 1,
         sample_count: 1,
         dimension: TextureDimension::D2,
-        format: TextureFormat::Rgba8UnormSrgb,
+        format,
         usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
         view_formats: &[],
     };

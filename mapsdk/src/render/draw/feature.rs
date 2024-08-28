@@ -13,8 +13,8 @@ use crate::{
             },
             buffer::VertexIndexBuffer,
         },
-        tessellation::{circle::tessellate_circle, geometry::tessellate_geometry, Tessellations},
-        DrawItem, InterRenderers, MapRenderer, MapRenderingContext, MapState,
+        tessellation::{circle::tessellate_circle, geometry::tessellate_geometry},
+        DrawItem, InterRenderers, MapOptions, MapRenderer, MapRenderingContext, MapState,
     },
 };
 
@@ -22,8 +22,6 @@ pub struct FeatureDrawable {
     feature: Feature,
     z: f32,
     shape_styles: ShapeStyles,
-
-    tessellations: Tessellations,
 
     fill_buffers: Vec<VertexIndexBuffer>,
     stroke_buffers: Vec<VertexIndexBuffer>,
@@ -62,8 +60,6 @@ impl FeatureDrawable {
             z: z as f32,
             shape_styles: shape_styles.clone(),
 
-            tessellations,
-
             fill_buffers,
             stroke_buffers,
         }
@@ -73,6 +69,7 @@ impl FeatureDrawable {
 impl Drawable for FeatureDrawable {
     fn draw(
         &mut self,
+        _map_options: &MapOptions,
         map_state: &MapState,
         map_renderer: &MapRenderer,
         _inter_renderers: &InterRenderers,

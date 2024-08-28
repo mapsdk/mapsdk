@@ -157,7 +157,7 @@ impl Map {
         {
             if let Ok(mut context) = self.context.lock() {
                 context.layers.insert(name.to_string(), layer);
-                context.state.layers_order.push(name.to_string());
+                context.map_state.layers_order.push(name.to_string());
             }
         }
 
@@ -167,7 +167,7 @@ impl Map {
     }
 
     pub fn center(&self) -> Option<Coord> {
-        Some(self.context.lock().ok()?.state.center.clone())
+        Some(self.context.lock().ok()?.map_state.center.clone())
     }
 
     /// Ease to the given view, with an animated transition.
@@ -268,8 +268,8 @@ impl Map {
                         }
 
                         if to_pitch.is_some() || to_yaw.is_some() {
-                            let pitch = to_pitch.unwrap_or(context.state.pitch);
-                            let yaw = to_yaw.unwrap_or(context.state.yaw);
+                            let pitch = to_pitch.unwrap_or(context.map_state.pitch);
+                            let yaw = to_yaw.unwrap_or(context.map_state.yaw);
                             context.set_pitch_yaw(pitch, yaw);
                         }
                     }
@@ -303,8 +303,8 @@ impl Map {
                 }
 
                 if map_view_change.pitch.is_some() || map_view_change.yaw.is_some() {
-                    let pitch = map_view_change.pitch.unwrap_or(context.state.pitch);
-                    let yaw = map_view_change.yaw.unwrap_or(context.state.yaw);
+                    let pitch = map_view_change.pitch.unwrap_or(context.map_state.pitch);
+                    let yaw = map_view_change.yaw.unwrap_or(context.map_state.yaw);
                     context.set_pitch_yaw(pitch, yaw);
                 }
             }
@@ -321,7 +321,7 @@ impl Map {
         self.context
             .lock()
             .ok()
-            .and_then(|context| Some(context.state.pitch))
+            .and_then(|context| Some(context.map_state.pitch))
             .unwrap_or(0.0)
     }
 
@@ -337,7 +337,7 @@ impl Map {
                 }
 
                 context.layers.remove(name);
-                context.state.layers_order.retain(|x| *x != name);
+                context.map_state.layers_order.retain(|x| *x != name);
             }
         }
 
@@ -345,8 +345,8 @@ impl Map {
     }
 
     pub fn resolution(&self) -> Option<f64> {
-        let zoom_res = self.context.lock().ok()?.state.zoom_res;
-        let map_res_ratio = self.context.lock().ok()?.state.map_res_ratio;
+        let zoom_res = self.context.lock().ok()?.map_state.zoom_res;
+        let map_res_ratio = self.context.lock().ok()?.map_state.map_res_ratio;
 
         Some(zoom_res * map_res_ratio)
     }
@@ -401,7 +401,7 @@ impl Map {
         self.context
             .lock()
             .ok()
-            .and_then(|context| Some(context.state.yaw))
+            .and_then(|context| Some(context.map_state.yaw))
             .unwrap_or(0.0)
     }
 
@@ -421,7 +421,7 @@ impl Map {
         self.context
             .lock()
             .ok()
-            .and_then(|context| Some(context.state.zoom_res))
+            .and_then(|context| Some(context.map_state.zoom_res))
             .unwrap_or(0.0)
     }
 

@@ -6,12 +6,11 @@ use glam::{Quat, Vec3};
 use wgpu::*;
 
 use crate::{
-    map::context::MapState,
+    map::{context::MapState, MapOptions},
     render::{
         camera::Camera,
         draw::{vector_tile::VectorTileDrawable, DrawItem},
         resources::{bind_group::*, pipeline::*, texture::create_depth_texture},
-        targets::Window,
     },
     utils::size::PixelSize,
     Canvas,
@@ -177,7 +176,12 @@ impl MapRenderer {
         }
     }
 
-    pub fn render(&mut self, map_state: &MapState, inter_renderers: &InterRenderers) {
+    pub fn render(
+        &mut self,
+        map_options: &MapOptions,
+        map_state: &MapState,
+        inter_renderers: &InterRenderers,
+    ) {
         let instant = Instant::now();
 
         let MapRenderingContext {
@@ -213,7 +217,13 @@ impl MapRenderer {
                 for layer_name in &map_state.layers_order {
                     if let Some(layer_pair) = self.layer_draw_items.get_mut(layer_name) {
                         layer_pair.value().iter_mut().for_each(|mut draw_item| {
-                            draw_item.draw(map_state, &self, inter_renderers, &mut render_pass);
+                            draw_item.draw(
+                                map_options,
+                                map_state,
+                                &self,
+                                inter_renderers,
+                                &mut render_pass,
+                            );
                         });
                     }
                 }
@@ -230,6 +240,7 @@ impl MapRenderer {
         &mut self,
         width: u32,
         height: u32,
+        map_options: &MapOptions,
         map_state: &MapState,
         inter_renderers: &InterRenderers,
     ) {
@@ -254,18 +265,19 @@ impl MapRenderer {
         self.rendering_context.depth_texture_view =
             depth_texture.create_view(&TextureViewDescriptor::default());
 
-        self.render(&map_state, inter_renderers);
+        self.render(map_options, map_state, inter_renderers);
     }
 
     pub fn set_pitch_yaw(
         &mut self,
         pitch: f64,
         yaw: f64,
+        map_options: &MapOptions,
         map_state: &MapState,
         inter_renderers: &InterRenderers,
     ) {
         self.update_camera_position(pitch, yaw);
-        self.render(&map_state, inter_renderers);
+        self.render(map_options, map_state, inter_renderers);
     }
 
     fn update_camera_position(&mut self, pitch: f64, yaw: f64) {
@@ -318,10 +330,6 @@ impl MapRendererOptions {
     }
 }
 
-pub enum MapRendererType {
-    Window(Window),
-}
-
 pub struct MapRenderingContext {
     pixel_ratio: f64,
     surface: Surface<'static>,
@@ -344,79 +352,26 @@ pub struct InterRenderers {
 }
 
 pub struct VectorTileRenderer {
-    // rendering_context: VectorTileRenderingContext,
     camera: Camera,
     map_state: MapState,
 }
 
 impl VectorTileRenderer {
     pub async fn new() -> Self {
-        let instance = Instance::default();
-
-        let adapter = instance
-            .request_adapter(&RequestAdapterOptions {
-                power_preference: PowerPreference::default(),
-                force_fallback_adapter: false,
-                ..Default::default()
-            })
-            .await
-            .expect("Failed to find adapter");
-
-        let (device, queue) = adapter
-            .request_device(
-                &DeviceDescriptor {
-                    required_features: Features::empty(),
-                    required_limits: if cfg!(target_arch = "wasm32") {
-                        Limits::downlevel_webgl2_defaults().using_resolution(adapter.limits())
-                    } else {
-                        Limits::default().using_resolution(adapter.limits())
-                    },
-                    memory_hints: Default::default(),
-                    label: None,
-                },
-                None,
-            )
-            .await
-            .expect("Failed to find device");
-
-        let color_target_state = ColorTargetState {
-            format: TextureFormat::Rgba8UnormSrgb,
-            blend: Some(BlendState::ALPHA_BLENDING),
-            write_mask: ColorWrites::ALL,
-        };
-
-        let shape_fill_pipeline = create_shape_fill_pipeline(&device, &color_target_state);
-        let shape_stroke_pipeline = create_shape_stroke_pipeline(&device, &color_target_state);
-        let symbol_circle_pipeline = create_symbol_circle_pipeline(&device, &color_target_state);
-
-        let rendering_context = VectorTileRenderingContext {
-            device,
-            queue,
-
-            shape_fill_pipeline,
-            shape_stroke_pipeline,
-            symbol_circle_pipeline,
-        };
-
         let mut camera = Camera::default();
-        camera.set_eye(Vec3::new(2048.0, 2048.0, 2048.0));
+        camera.set_eye(Vec3::new(2048.0, 2048.0, -2048.0));
+        camera.set_target(Vec3::new(2048.0, 2048.0, 0.0));
         camera.set_up(-Vec3::Y);
 
         let mut map_state = MapState::default();
-        map_state.center = Coord {
-            x: 2048.0,
-            y: 2048.0,
-        };
+        map_state.center = Coord { x: 0.0, y: 0.0 };
 
-        Self {
-            // rendering_context,
-            camera,
-            map_state,
-        }
+        Self { camera, map_state }
     }
 
     pub fn render(
         &self,
+        map_options: &MapOptions,
         map_renderer: &MapRenderer,
         vector_tile_drawable: &mut VectorTileDrawable,
     ) {
@@ -450,6 +405,10 @@ impl VectorTileRenderer {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
+
+            let vt_pixel_ratio = 4096.0
+                / map_options.tiling.tile_size() as f32
+                / map_renderer.rendering_context.pixel_ratio as f32;
 
             let map_view_bgl = create_map_view_bgl(device);
             let map_view_bg =
@@ -507,7 +466,7 @@ impl VectorTileRenderer {
                         if shape_styles.fill_enabled {
                             let symbol_circle_params_bg = create_symbol_circle_params_bg(
                                 device,
-                                1.0,
+                                vt_pixel_ratio,
                                 &symbol_circle_params_bgl,
                                 vector_tile_drawable.z,
                                 &shape_styles,
@@ -549,7 +508,7 @@ impl VectorTileRenderer {
                             {
                                 let shape_stroke_params_bg = create_shape_stroke_params_bg(
                                     device,
-                                    1.0,
+                                    vt_pixel_ratio,
                                     &shape_stroke_params_bgl,
                                     vector_tile_drawable.z,
                                     0,
@@ -577,7 +536,7 @@ impl VectorTileRenderer {
                             {
                                 let shape_stroke_params_bg = create_shape_stroke_params_bg(
                                     device,
-                                    1.0,
+                                    vt_pixel_ratio,
                                     &shape_stroke_params_bgl,
                                     vector_tile_drawable.z,
                                     1,
@@ -612,13 +571,4 @@ impl VectorTileRenderer {
             instant.elapsed()
         );
     }
-}
-
-pub struct VectorTileRenderingContext {
-    device: Device,
-    queue: Queue,
-
-    shape_fill_pipeline: RenderPipeline,
-    shape_stroke_pipeline: RenderPipeline,
-    symbol_circle_pipeline: RenderPipeline,
 }

@@ -14,7 +14,7 @@ use crate::{
             texture::create_texture,
         },
         tessellation::{circle::tessellate_circle, geometry::tessellate_geometry},
-        DrawItem, InterRenderers, MapRenderer, MapRenderingContext, MapState,
+        DrawItem, InterRenderers, MapOptions, MapRenderer, MapRenderingContext, MapState,
     },
     vector_tile::VectorTile,
 };
@@ -41,7 +41,7 @@ impl VectorTileDrawable {
         z: f64,
         layers_shape_styles: &Vec<(String, ShapeStyles)>,
         map_renderer: &MapRenderer,
-        inter_renderers: &InterRenderers,
+        _inter_renderers: &InterRenderers,
     ) -> Self {
         let mut fill_vertices: Vec<[f32; 2]> = Vec::new();
         let mut fill_indices: Vec<u16> = Vec::new();
@@ -109,22 +109,26 @@ impl VectorTileDrawable {
             }
         }
 
-        let device = &map_renderer.rendering_context.device;
+        let MapRenderingContext {
+            device,
+            color_target_state,
+            ..
+        } = &map_renderer.rendering_context;
 
         let fill_vertex_buffer =
-            create_vertex_buffer_from_vec2_f32_slice(&device, "Fill Vertex Buffer", &fill_vertices);
+            create_vertex_buffer_from_vec2_f32_slice(device, "Fill Vertex Buffer", &fill_vertices);
         let fill_index_buffer =
-            create_index_buffer_from_u16_slice(&device, "Fill Index Buffer", &fill_indices);
+            create_index_buffer_from_u16_slice(device, "Fill Index Buffer", &fill_indices);
 
         let stroke_vertex_buffer = create_vertex_buffer_from_vec7_f32_slice(
-            &device,
+            device,
             "Stroke Vertex Buffer",
             &stroke_vertices,
         );
         let stroke_index_buffer =
-            create_index_buffer_from_u16_slice(&device, "Stroke Index Buffer", &stroke_indices);
+            create_index_buffer_from_u16_slice(device, "Stroke Index Buffer", &stroke_indices);
 
-        let texture = create_texture(device, 4096);
+        let texture = create_texture(device, 4096, color_target_state.format);
         let texture_view = texture.create_view(&TextureViewDescriptor::default());
 
         let bbox = vector_tile.bbox();
@@ -135,14 +139,14 @@ impl VectorTileDrawable {
             [bbox.max().x as f32, bbox.min().y as f32],
         ];
         let texture_vertex_buffer = create_vertex_buffer_from_vec2_f32_slice(
-            &device,
+            device,
             "Vector Tile Texture VertexBuffer",
             &texture_vertices,
         );
 
         let texture_indices: [u16; 4] = [0, 1, 2, 3];
         let texture_index_buffer = create_index_buffer_from_u16_slice(
-            &device,
+            device,
             "Vector Tile Texture IndexBuffer",
             &texture_indices,
         );
@@ -168,6 +172,7 @@ impl VectorTileDrawable {
 impl Drawable for VectorTileDrawable {
     fn draw(
         &mut self,
+        map_options: &MapOptions,
         map_state: &MapState,
         map_renderer: &MapRenderer,
         inter_renderers: &InterRenderers,
@@ -177,7 +182,7 @@ impl Drawable for VectorTileDrawable {
         if self.texture_updated_zoom_res != map_state.zoom_res {
             inter_renderers
                 .vector_tile_renderer
-                .render(map_renderer, self);
+                .render(map_options, map_renderer, self);
             self.texture_updated_zoom_res = map_state.zoom_res;
         }
 
