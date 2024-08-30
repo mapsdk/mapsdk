@@ -19,7 +19,7 @@ impl Default for ShapeStyles {
             stroke_enabled: true,
             stroke_color: Color::from_rgb(0, 0, 0),
             stroke_width: 1.8,
-            symbol_size: 8.0,
+            symbol_size: 4.0,
             outline_align: OutlineAlign::Center,
         }
     }

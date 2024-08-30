@@ -22,8 +22,9 @@ fn vs_main(
     var x = (vertex_coord[0] - map_center[0]) / map_res;
     var y = (vertex_coord[1] - map_center[1]) / map_res;
 
-    let dx = select(radius * 2.0, 0.0, vertex_idx % 2 == 0) - radius;
-    let dy = radius - select(radius * 2.0, 0.0, vertex_idx < 2);
+    let vertex_idx_norm = vertex_idx % 4;
+    let dx = select(radius * 2.0, 0.0, vertex_idx_norm % 2 == 0) - radius;
+    let dy = radius - select(radius * 2.0, 0.0, vertex_idx_norm < 2);
 
     let position = view_proj * vec4<f32>(x + dx, y + dy, z / map_res, 1.0);
     let coord = vec2<f32>(dx, dy);
