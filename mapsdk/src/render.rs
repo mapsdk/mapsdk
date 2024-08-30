@@ -448,8 +448,14 @@ impl VectorTileRenderer {
                                     && !feature_meta.shape_is_lines
                                     && feature_meta.shape_styles_index == shape_styles_index
                                 {
-                                    for index in &feature_meta.fill_buffer_index {
-                                        render_pass.draw_indexed(index.0..index.1, index.2, 0..1);
+                                    for (index_start, index_end, base_vertex) in
+                                        &feature_meta.fill_buffer_index
+                                    {
+                                        render_pass.draw_indexed(
+                                            *index_start..*index_end,
+                                            *base_vertex,
+                                            0..1,
+                                        );
                                     }
                                 }
                             }
@@ -479,8 +485,14 @@ impl VectorTileRenderer {
                                 if feature_meta.shape_is_points
                                     && feature_meta.shape_styles_index == shape_styles_index
                                 {
-                                    for index in &feature_meta.fill_buffer_index {
-                                        render_pass.draw_indexed(index.0..index.1, index.2, 0..1);
+                                    for (index_start, index_end, base_vertex) in
+                                        &feature_meta.fill_buffer_index
+                                    {
+                                        render_pass.draw_indexed(
+                                            *index_start..*index_end,
+                                            *base_vertex,
+                                            0..1,
+                                        );
                                     }
                                 }
                             }
@@ -522,10 +534,12 @@ impl VectorTileRenderer {
                                     if feature_meta.shape_is_lines
                                         && feature_meta.shape_styles_index == shape_styles_index
                                     {
-                                        for index in &feature_meta.stroke_buffer_index {
+                                        for (index_start, index_end, base_vertex) in
+                                            &feature_meta.stroke_buffer_index
+                                        {
                                             render_pass.draw_indexed(
-                                                index.0..index.1,
-                                                index.2,
+                                                *index_start..*index_end,
+                                                *base_vertex,
                                                 0..1,
                                             );
                                         }
@@ -548,10 +562,12 @@ impl VectorTileRenderer {
 
                                 for feature_meta in &vector_tile_drawable.feature_metas {
                                     if feature_meta.shape_styles_index == shape_styles_index {
-                                        for index in &feature_meta.stroke_buffer_index {
+                                        for (index_start, index_end, base_vertex) in
+                                            &feature_meta.stroke_buffer_index
+                                        {
                                             render_pass.draw_indexed(
-                                                index.0..index.1,
-                                                index.2,
+                                                *index_start..*index_end,
+                                                *base_vertex,
                                                 0..1,
                                             );
                                         }
