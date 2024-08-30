@@ -16,7 +16,7 @@ impl Default for ShapeStyles {
             symbol_size: 8.0,
             stroke_enabled: true,
             stroke_color: Color::from_rgb(0, 0, 0),
-            stroke_width: 2.8,
+            stroke_width: 0.8,
             fill_enabled: true,
             fill_color: Color::from_rgba(255, 0, 0, 0.7),
         }

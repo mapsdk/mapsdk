@@ -13,7 +13,10 @@ use crate::{
         Event, Layer, LayerType,
     },
     map::{context::MapState, Map, MapOptions},
-    render::{draw::vector_tile::VectorTileDrawable, InterRenderers, MapRenderer},
+    render::{
+        draw::vector_tile::{VectorTileDrawable, VectorTileDrawableFeatures},
+        InterRenderers, MapRenderer,
+    },
     tiling::TileId,
     utils::http::{HttpPool, HttpRequest, HttpResponse},
     vector_tile::VectorTile,
@@ -30,6 +33,9 @@ pub struct VectorTiledLayer {
     tile_response_handle: Option<JoinHandle<()>>,
 
     requesting_tile_ids: Arc<DashSet<TileId>>,
+
+    tessellating_tile_ids: Arc<DashSet<TileId>>,
+    tessellated_tiles: Arc<DashMap<TileId, VectorTileDrawableFeatures>>,
 
     vector_tiles_cache: Cache<TileId, VectorTile>,
     vector_tiles: Arc<DashMap<TileId, VectorTile>>,
@@ -50,6 +56,9 @@ impl VectorTiledLayer {
             tile_response_handle: None,
 
             requesting_tile_ids: Arc::new(DashSet::new()),
+
+            tessellating_tile_ids: Arc::new(DashSet::new()),
+            tessellated_tiles: Arc::new(DashMap::new()),
 
             vector_tiles_cache: Cache::new(cache_size),
             vector_tiles: Arc::new(DashMap::new()),
@@ -272,15 +281,47 @@ impl Layer for VectorTiledLayer {
             let vector_tile = pair.value();
 
             if !map_renderer.contains_layer_draw_item(&self.name, tile_id) {
-                let drawable = VectorTileDrawable::new(
-                    &vector_tile,
-                    self.options.z,
-                    &self.options.layers_shape_styles,
-                    &map_renderer,
-                    &inter_renderers,
-                );
+                if self.tessellating_tile_ids.contains(tile_id) {
+                    continue;
+                }
 
-                map_renderer.add_layer_draw_item(&self.name, tile_id, drawable.into());
+                if let Some((_, tessellated_tile)) = self.tessellated_tiles.remove(tile_id) {
+                    let drawable = VectorTileDrawable::new(
+                        &vector_tile,
+                        self.options.z,
+                        &self.options.layers_shape_styles,
+                        tessellated_tile,
+                        &map_renderer,
+                        &inter_renderers,
+                    );
+
+                    map_renderer.add_layer_draw_item(&self.name, tile_id, drawable.into());
+                } else {
+                    env::spawn({
+                        let tile_id = tile_id.clone();
+                        let vector_tile = vector_tile.clone();
+                        let layers_shape_styles = self.options.layers_shape_styles.clone();
+
+                        let tessellating_tile_ids = self.tessellating_tile_ids.clone();
+                        let tessellated_tiles = self.tessellated_tiles.clone();
+
+                        let event_sender = self.event_sender.clone();
+
+                        async move {
+                            tessellating_tile_ids.insert(tile_id.clone());
+
+                            let tessellated_tile =
+                                VectorTileDrawableFeatures::new(&vector_tile, &layers_shape_styles);
+                            tessellated_tiles.insert(tile_id.clone(), tessellated_tile);
+
+                            tessellating_tile_ids.remove(&tile_id);
+
+                            if let Some(event_sender) = &event_sender {
+                                let _ = event_sender.send(Event::MapRequestRedraw);
+                            }
+                        }
+                    });
+                }
             }
         }
     }
