@@ -71,7 +71,7 @@ impl VectorTileDrawable {
         let stroke_index_buffer =
             create_index_buffer_from_u16_slice(device, "Stroke Index Buffer", &stroke_indices);
 
-        let texture = create_texture(device, 4096, color_target_state.format);
+        let texture = create_texture(device, 4096, 4096, color_target_state.format);
         let texture_view = texture.create_view(&TextureViewDescriptor::default());
 
         let bbox = vector_tile.bbox();
@@ -125,7 +125,7 @@ impl Drawable for VectorTileDrawable {
         if self.texture_updated_zoom_res != map_state.zoom_res {
             inter_renderers
                 .vector_tile_renderer
-                .render(map_options, map_renderer, self);
+                .render(map_options, map_state, map_renderer, self);
             self.texture_updated_zoom_res = map_state.zoom_res;
         }
 

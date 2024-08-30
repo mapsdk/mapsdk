@@ -10,7 +10,7 @@ use crate::render::{
             create_image_texture_bgl, create_map_view_bg, create_map_view_bgl,
         },
         buffer::{create_index_buffer_from_u16_slice, create_vertex_buffer_from_vec2_f32_slice},
-        texture::create_texture_from_image,
+        texture::create_texture,
     },
     DrawItem, InterRenderers, MapOptions, MapRenderer, MapRenderingContext, MapState,
 };
@@ -25,14 +25,12 @@ pub struct ImageDrawable {
 
 impl ImageDrawable {
     pub fn new(map_renderer: &MapRenderer, image: &DynamicImage, bbox: &Rect, z: f64) -> Self {
-        let MapRenderingContext {
-            device,
-            queue,
-            color_target_state,
-            ..
-        } = &map_renderer.rendering_context;
+        let MapRenderingContext { device, queue, .. } = &map_renderer.rendering_context;
 
-        let texture = create_texture_from_image(&device, image, color_target_state.format);
+        let width = image.width();
+        let height = image.height();
+        let texture = create_texture(&device, width, height, TextureFormat::Rgba8UnormSrgb);
+
         queue.write_texture(
             ImageCopyTexture {
                 texture: &texture,
@@ -43,8 +41,8 @@ impl ImageDrawable {
             &image.to_rgba8(),
             ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(4 * image.width()),
-                rows_per_image: Some(image.height()),
+                bytes_per_row: Some(4 * width),
+                rows_per_image: Some(height),
             },
             texture.size(),
         );

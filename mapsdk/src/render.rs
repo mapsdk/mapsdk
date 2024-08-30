@@ -6,6 +6,7 @@ use glam::{Quat, Vec3};
 use wgpu::*;
 
 use crate::{
+    feature::style::OutlineAlign,
     map::{context::MapState, MapOptions},
     render::{
         camera::Camera,
@@ -372,6 +373,7 @@ impl VectorTileRenderer {
     pub fn render(
         &self,
         map_options: &MapOptions,
+        map_state: &MapState,
         map_renderer: &MapRenderer,
         vector_tile_drawable: &mut VectorTileDrawable,
     ) {
@@ -406,7 +408,9 @@ impl VectorTileRenderer {
                 occlusion_query_set: None,
             });
 
-            let vt_pixel_ratio = 4096.0
+            let zoom_scale =
+                (map_state.zoom_res / map_options.tiling.get_resolution(map_state.zoom)) as f32;
+            let vt_pixel_ratio = zoom_scale * 4096.0
                 / map_options.tiling.tile_size() as f32
                 / map_renderer.rendering_context.pixel_ratio as f32;
 
@@ -548,12 +552,17 @@ impl VectorTileRenderer {
                             }
 
                             {
+                                let align = if shape_styles.outline_align == OutlineAlign::Center {
+                                    0
+                                } else {
+                                    1
+                                };
                                 let shape_stroke_params_bg = create_shape_stroke_params_bg(
                                     device,
                                     vt_pixel_ratio,
                                     &shape_stroke_params_bgl,
                                     vector_tile_drawable.z,
-                                    1,
+                                    align,
                                     &shape_styles,
                                 );
 

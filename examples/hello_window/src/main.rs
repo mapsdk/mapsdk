@@ -4,7 +4,10 @@ use std::time::Duration;
 
 use geo::{line_string, point, polygon, Coord, MultiLineString, MultiPolygon, Rect};
 use mapsdk::{
-    feature::{style::ShapeStyles, Feature, Shape},
+    feature::{
+        style::{OutlineAlign, ShapeStyles},
+        Feature, Shape,
+    },
     layer::{
         feature_layer::{FeatureLayer, FeatureLayerOptions},
         image_layer::{ImageLayer, ImageLayerOptions},
@@ -89,13 +92,18 @@ impl ApplicationHandler for App {
                     "http://{s}.tile.osm.org/{z}/{x}/{y}.png",
                     image_tiled_layer_options,
                 );
-                //let _ = map.add_layer("image tiled", Box::new(image_tiled_layer));
+                let _ = map.add_layer("image tiled", Box::new(image_tiled_layer));
 
                 let vector_tiled_layer_options = VectorTiledLayerOptions::default()
                     .with_layers_shape_styles(&vec![
-                        ("centroids", ShapeStyles::default()),
+                        (
+                            "centroids",
+                            ShapeStyles {
+                                fill_color: Color::from_rgb(0, 100, 100),
+                                ..Default::default()
+                            },
+                        ),
                         ("countries", ShapeStyles::default()),
-                        ("geolines", ShapeStyles::default()),
                     ]);
                 let vector_tiled_layer = VectorTiledLayer::new(
                     "https://demotiles.maplibre.org/tiles/{z}/{x}/{y}.pbf",
@@ -103,7 +111,11 @@ impl ApplicationHandler for App {
                 );
                 let _ = map.add_layer("vector tiled", Box::new(vector_tiled_layer));
 
-                let feature_layer_options = FeatureLayerOptions::default();
+                let feature_layer_options =
+                    FeatureLayerOptions::default().with_shape_styles(ShapeStyles {
+                        outline_align: OutlineAlign::Side,
+                        ..Default::default()
+                    });
                 let mut feature_layer = FeatureLayer::new(feature_layer_options);
                 feature_layer.add_feature(Feature::new(
                     "0",
