@@ -1,7 +1,7 @@
 use wgpu::*;
 
 use crate::{
-    feature::{style::ShapeStyles, Shape},
+    feature::style::ShapeStyles,
     render::{
         create_image_params_bg, create_image_params_bgl, create_image_texture_bg,
         create_image_texture_bgl, create_map_view_bg, create_map_view_bgl,
@@ -13,10 +13,9 @@ use crate::{
             },
             texture::create_texture,
         },
-        tessellation::{circle::tessellate_circle, geometry::tessellate_geometry},
+        tessellation::vector_tile::{VectorTileShapeMeta, VectorTileTessellation},
         DrawItem, InterRenderers, MapOptions, MapRenderer, MapRenderingContext, MapState,
     },
-    vector_tile::VectorTile,
 };
 
 pub struct VectorTileDrawable {
@@ -27,7 +26,7 @@ pub struct VectorTileDrawable {
     pub fill_index_buffer: Buffer,
     pub stroke_vertex_buffer: Buffer,
     pub stroke_index_buffer: Buffer,
-    pub feature_metas: Vec<VectorTileFeatureMeta>,
+    pub shape_metas: Vec<VectorTileShapeMeta>,
 
     pub texture_view: TextureView,
     pub texture_updated_zoom_res: f64,
@@ -37,20 +36,21 @@ pub struct VectorTileDrawable {
 
 impl VectorTileDrawable {
     pub fn new(
-        vector_tile: &VectorTile,
+        vector_tile_tessellation: &VectorTileTessellation,
         z: f64,
         layers_shape_styles: &Vec<(String, ShapeStyles)>,
-        tessellated_tile: VectorTileDrawableFeatures,
         map_renderer: &MapRenderer,
         _inter_renderers: &InterRenderers,
     ) -> Self {
-        let VectorTileDrawableFeatures {
+        let VectorTileTessellation {
             fill_vertices,
             fill_indices,
             stroke_vertices,
             stroke_indices,
-            feature_metas,
-        } = tessellated_tile;
+
+            tile_bbox,
+            shape_metas,
+        } = vector_tile_tessellation;
 
         let MapRenderingContext {
             device,
@@ -74,12 +74,11 @@ impl VectorTileDrawable {
         let texture = create_texture(device, 4096, 4096, color_target_state.format);
         let texture_view = texture.create_view(&TextureViewDescriptor::default());
 
-        let bbox = vector_tile.bbox();
         let texture_vertices = [
-            [bbox.min().x as f32, bbox.max().y as f32],
-            [bbox.max().x as f32, bbox.max().y as f32],
-            [bbox.min().x as f32, bbox.min().y as f32],
-            [bbox.max().x as f32, bbox.min().y as f32],
+            [tile_bbox[0], tile_bbox[3]],
+            [tile_bbox[2], tile_bbox[3]],
+            [tile_bbox[0], tile_bbox[1]],
+            [tile_bbox[2], tile_bbox[1]],
         ];
         let texture_vertex_buffer = create_vertex_buffer_from_vec2_f32_slice(
             device,
@@ -102,7 +101,7 @@ impl VectorTileDrawable {
             fill_index_buffer,
             stroke_vertex_buffer,
             stroke_index_buffer,
-            feature_metas,
+            shape_metas: shape_metas.clone(),
 
             texture_view,
             texture_updated_zoom_res: 0.0,
@@ -165,99 +164,4 @@ impl Into<DrawItem> for VectorTileDrawable {
     fn into(self) -> DrawItem {
         DrawItem::VectorTile(self)
     }
-}
-
-pub struct VectorTileDrawableFeatures {
-    pub fill_vertices: Vec<[f32; 2]>,
-    pub fill_indices: Vec<u16>,
-    pub stroke_vertices: Vec<[f32; 7]>,
-    pub stroke_indices: Vec<u16>,
-    pub feature_metas: Vec<VectorTileFeatureMeta>,
-}
-
-impl VectorTileDrawableFeatures {
-    pub fn new(vector_tile: &VectorTile, layers_shape_styles: &Vec<(String, ShapeStyles)>) -> Self {
-        let mut fill_vertices = Vec::new();
-        let mut fill_indices = Vec::new();
-        let mut stroke_vertices = Vec::new();
-        let mut stroke_indices = Vec::new();
-        let mut feature_metas = Vec::new();
-
-        let mut fill_vertex_start: i32 = 0;
-        let mut fill_index_start: u32 = 0;
-        let mut stroke_vertex_start: i32 = 0;
-        let mut stroke_index_start: u32 = 0;
-
-        for (shape_styles_index, (layer_name, _)) in layers_shape_styles.iter().enumerate() {
-            if let Some(layer) = &vector_tile.layers().get(layer_name) {
-                for feature in &layer.features {
-                    let shape = feature.shape();
-
-                    let tessellations = match shape {
-                        Shape::Circle { center, radius } => tessellate_circle(center, *radius, 6),
-                        Shape::Geometry(geom) => tessellate_geometry(geom),
-                    };
-
-                    let mut fill_buffer_index = Vec::new();
-                    let mut stroke_buffer_index = Vec::new();
-
-                    for fill_vertex_index in &tessellations.fills {
-                        fill_vertices.extend_from_slice(&fill_vertex_index.vertices);
-                        fill_indices.extend_from_slice(&fill_vertex_index.indices);
-
-                        let index_count = fill_vertex_index.indices.len() as u32;
-                        fill_buffer_index.push((
-                            fill_index_start,
-                            fill_index_start + index_count,
-                            fill_vertex_start,
-                        ));
-
-                        fill_vertex_start += fill_vertex_index.vertices.len() as i32;
-                        fill_index_start += index_count;
-                    }
-
-                    for stroke_vertex_index in &tessellations.strokes {
-                        stroke_vertices.extend_from_slice(&stroke_vertex_index.vertices);
-                        stroke_indices.extend_from_slice(&stroke_vertex_index.indices);
-
-                        let index_count = stroke_vertex_index.indices.len() as u32;
-                        stroke_buffer_index.push((
-                            stroke_index_start,
-                            stroke_index_start + index_count,
-                            stroke_vertex_start,
-                        ));
-
-                        stroke_vertex_start += stroke_vertex_index.vertices.len() as i32;
-                        stroke_index_start += index_count;
-                    }
-
-                    feature_metas.push(VectorTileFeatureMeta {
-                        shape_is_points: shape.is_points(),
-                        shape_is_lines: shape.is_lines(),
-                        shape_styles_index,
-
-                        fill_buffer_index,
-                        stroke_buffer_index,
-                    });
-                }
-            }
-        }
-
-        Self {
-            fill_vertices,
-            fill_indices,
-            stroke_vertices,
-            stroke_indices,
-            feature_metas,
-        }
-    }
-}
-
-pub struct VectorTileFeatureMeta {
-    pub shape_is_points: bool,
-    pub shape_is_lines: bool,
-    pub shape_styles_index: usize,
-
-    pub fill_buffer_index: Vec<(u32, u32, i32)>,
-    pub stroke_buffer_index: Vec<(u32, u32, i32)>,
 }

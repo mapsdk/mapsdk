@@ -1,5 +1,6 @@
 pub mod circle;
 pub mod geometry;
+pub mod vector_tile;
 
 pub struct Tessellations {
     pub fills: Vec<FillVertexIndex>,

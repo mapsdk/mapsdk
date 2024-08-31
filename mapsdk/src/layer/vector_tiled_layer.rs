@@ -14,7 +14,7 @@ use crate::{
     },
     map::{context::MapState, Map, MapOptions},
     render::{
-        draw::vector_tile::{VectorTileDrawable, VectorTileDrawableFeatures},
+        draw::vector_tile::VectorTileDrawable, tessellation::vector_tile::VectorTileTessellation,
         InterRenderers, MapRenderer,
     },
     tiling::TileId,
@@ -34,11 +34,8 @@ pub struct VectorTiledLayer {
 
     requesting_tile_ids: Arc<DashSet<TileId>>,
 
-    tessellating_tile_ids: Arc<DashSet<TileId>>,
-    tessellated_tiles: Arc<DashMap<TileId, VectorTileDrawableFeatures>>,
-
-    vector_tiles_cache: Cache<TileId, VectorTile>,
-    vector_tiles: Arc<DashMap<TileId, VectorTile>>,
+    vector_tile_tessellations_cache: Cache<TileId, VectorTileTessellation>,
+    vector_tile_tessellations: Arc<DashMap<TileId, VectorTileTessellation>>,
 }
 
 impl VectorTiledLayer {
@@ -57,11 +54,8 @@ impl VectorTiledLayer {
 
             requesting_tile_ids: Arc::new(DashSet::new()),
 
-            tessellating_tile_ids: Arc::new(DashSet::new()),
-            tessellated_tiles: Arc::new(DashMap::new()),
-
-            vector_tiles_cache: Cache::new(cache_size),
-            vector_tiles: Arc::new(DashMap::new()),
+            vector_tile_tessellations_cache: Cache::new(cache_size),
+            vector_tile_tessellations: Arc::new(DashMap::new()),
         }
     }
 }
@@ -84,7 +78,9 @@ impl Layer for VectorTiledLayer {
 
         self.tile_response_handle = Some(env::spawn({
             let tiling = map.options.tiling.clone();
-            let vector_tiles_cache = self.vector_tiles_cache.clone();
+            let layers_shape_styles = self.options.layers_shape_styles.clone();
+
+            let vector_tile_tessellations_cache = self.vector_tile_tessellations_cache.clone();
             let requesting_tile_ids = self.requesting_tile_ids.clone();
             let event_sender = self.event_sender.clone();
 
@@ -96,18 +92,33 @@ impl Layer for VectorTiledLayer {
                         let tile_id = http_response.id.clone();
                         if let Some(tile_bbox) = tiling.get_tile_bbox(&tile_id) {
                             if let Ok(bytes) = http_response.bytes().await {
-                                if let Ok(vector_tile) =
-                                    VectorTile::from_data(bytes.to_vec(), tile_bbox)
-                                {
-                                    log::debug!("Vector tile {} loaded", tile_id.to_string());
-                                    vector_tiles_cache.insert(tile_id.clone(), vector_tile);
+                                requesting_tile_ids.remove(&tile_id);
 
-                                    requesting_tile_ids.remove(&tile_id);
+                                env::spawn({
+                                    let layers_shape_styles = layers_shape_styles.clone();
+                                    let vector_tile_tessellations_cache =
+                                        vector_tile_tessellations_cache.clone();
+                                    let event_sender = event_sender.clone();
 
-                                    if let Some(event_sender) = &event_sender {
-                                        let _ = event_sender.send(Event::MapRequestRedraw);
+                                    async move {
+                                        if let Ok(vector_tile) =
+                                            VectorTile::from_data(bytes.to_vec(), tile_bbox)
+                                        {
+                                            let vector_tile_tessellation =
+                                                VectorTileTessellation::new(
+                                                    &vector_tile,
+                                                    &layers_shape_styles,
+                                                );
+
+                                            vector_tile_tessellations_cache
+                                                .insert(tile_id.clone(), vector_tile_tessellation);
+
+                                            if let Some(event_sender) = &event_sender {
+                                                let _ = event_sender.send(Event::MapRequestRedraw);
+                                            }
+                                        }
                                     }
-                                }
+                                });
                             }
                         }
                     }
@@ -168,9 +179,9 @@ impl Layer for VectorTiledLayer {
 
         // Load tiles from cache if possible
         tile_ids.iter().for_each(|tile_id| {
-            if !self.vector_tiles.contains_key(tile_id) {
-                if let Some(vector_tile) = self.vector_tiles_cache.get(tile_id) {
-                    self.vector_tiles
+            if !self.vector_tile_tessellations.contains_key(tile_id) {
+                if let Some(vector_tile) = self.vector_tile_tessellations_cache.get(tile_id) {
+                    self.vector_tile_tessellations
                         .insert(tile_id.clone(), vector_tile.clone());
                 }
             }
@@ -180,7 +191,7 @@ impl Layer for VectorTiledLayer {
         {
             let mut load_tile_ids = tile_ids
                 .iter()
-                .filter(|tile_id| !self.vector_tiles.contains_key(&tile_id))
+                .filter(|tile_id| !self.vector_tile_tessellations.contains_key(&tile_id))
                 .collect::<Vec<_>>();
 
             load_tile_ids.sort_by_key(|tile_id| {
@@ -221,7 +232,7 @@ impl Layer for VectorTiledLayer {
         {
             let mut dirty_tiles: HashSet<TileId> = HashSet::new();
 
-            for pair in self.vector_tiles.iter() {
+            for pair in self.vector_tile_tessellations.iter() {
                 let tile_id = pair.key();
 
                 if let Some(bbox) = map_options.tiling.get_tile_bbox(&tile_id) {
@@ -241,14 +252,14 @@ impl Layer for VectorTiledLayer {
 
             // Keep resample tiles if possible
             for tile_id in &tile_ids {
-                if !self.vector_tiles.contains_key(tile_id) {
+                if !self.vector_tile_tessellations.contains_key(tile_id) {
                     let mut roll_up_resampled = false;
 
                     for level in 1..=5 {
                         if let Some(parent_tile_id) =
                             map_options.tiling.roll_up_tile_id(tile_id, level)
                         {
-                            if self.vector_tiles.contains_key(&parent_tile_id) {
+                            if self.vector_tile_tessellations.contains_key(&parent_tile_id) {
                                 dirty_tiles.remove(&parent_tile_id);
                                 roll_up_resampled = true;
                                 break;
@@ -270,58 +281,26 @@ impl Layer for VectorTiledLayer {
             }
 
             for tile_id in dirty_tiles {
-                self.vector_tiles.remove(&tile_id);
+                self.vector_tile_tessellations.remove(&tile_id);
 
                 map_renderer.remove_layer_draw_item(&self.name, &tile_id);
             }
         }
 
-        for pair in self.vector_tiles.iter() {
+        for pair in self.vector_tile_tessellations.iter() {
             let tile_id = pair.key();
-            let vector_tile = pair.value();
+            let vector_tile_tessellation = pair.value();
 
             if !map_renderer.contains_layer_draw_item(&self.name, tile_id) {
-                if self.tessellating_tile_ids.contains(tile_id) {
-                    continue;
-                }
+                let drawable = VectorTileDrawable::new(
+                    &vector_tile_tessellation,
+                    self.options.z,
+                    &self.options.layers_shape_styles,
+                    &map_renderer,
+                    &inter_renderers,
+                );
 
-                if let Some((_, tessellated_tile)) = self.tessellated_tiles.remove(tile_id) {
-                    let drawable = VectorTileDrawable::new(
-                        &vector_tile,
-                        self.options.z,
-                        &self.options.layers_shape_styles,
-                        tessellated_tile,
-                        &map_renderer,
-                        &inter_renderers,
-                    );
-
-                    map_renderer.add_layer_draw_item(&self.name, tile_id, drawable.into());
-                } else {
-                    env::spawn({
-                        let tile_id = tile_id.clone();
-                        let vector_tile = vector_tile.clone();
-                        let layers_shape_styles = self.options.layers_shape_styles.clone();
-
-                        let tessellating_tile_ids = self.tessellating_tile_ids.clone();
-                        let tessellated_tiles = self.tessellated_tiles.clone();
-
-                        let event_sender = self.event_sender.clone();
-
-                        async move {
-                            tessellating_tile_ids.insert(tile_id.clone());
-
-                            let tessellated_tile =
-                                VectorTileDrawableFeatures::new(&vector_tile, &layers_shape_styles);
-                            tessellated_tiles.insert(tile_id.clone(), tessellated_tile);
-
-                            tessellating_tile_ids.remove(&tile_id);
-
-                            if let Some(event_sender) = &event_sender {
-                                let _ = event_sender.send(Event::MapRequestRedraw);
-                            }
-                        }
-                    });
-                }
+                map_renderer.add_layer_draw_item(&self.name, tile_id, drawable.into());
             }
         }
     }

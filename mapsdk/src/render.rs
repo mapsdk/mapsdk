@@ -447,7 +447,7 @@ impl VectorTileRenderer {
                             render_pass.set_bind_group(0, &map_view_bg, &[]);
                             render_pass.set_bind_group(1, &shape_fill_params_bg, &[]);
 
-                            for feature_meta in &vector_tile_drawable.feature_metas {
+                            for feature_meta in &vector_tile_drawable.shape_metas {
                                 if !feature_meta.shape_is_points
                                     && !feature_meta.shape_is_lines
                                     && feature_meta.shape_styles_index == shape_styles_index
@@ -485,7 +485,7 @@ impl VectorTileRenderer {
                             render_pass.set_bind_group(0, &map_view_bg, &[]);
                             render_pass.set_bind_group(1, &symbol_circle_params_bg, &[]);
 
-                            for feature_meta in &vector_tile_drawable.feature_metas {
+                            for feature_meta in &vector_tile_drawable.shape_metas {
                                 if feature_meta.shape_is_points
                                     && feature_meta.shape_styles_index == shape_styles_index
                                 {
@@ -534,7 +534,7 @@ impl VectorTileRenderer {
                                 render_pass.set_bind_group(0, &map_view_bg, &[]);
                                 render_pass.set_bind_group(1, &shape_stroke_params_bg, &[]);
 
-                                for feature_meta in &vector_tile_drawable.feature_metas {
+                                for feature_meta in &vector_tile_drawable.shape_metas {
                                     if feature_meta.shape_is_lines
                                         && feature_meta.shape_styles_index == shape_styles_index
                                     {
@@ -569,7 +569,7 @@ impl VectorTileRenderer {
                                 render_pass.set_bind_group(0, &map_view_bg, &[]);
                                 render_pass.set_bind_group(1, &shape_stroke_params_bg, &[]);
 
-                                for feature_meta in &vector_tile_drawable.feature_metas {
+                                for feature_meta in &vector_tile_drawable.shape_metas {
                                     if feature_meta.shape_styles_index == shape_styles_index {
                                         for (index_start, index_end, base_vertex) in
                                             &feature_meta.stroke_buffer_index
