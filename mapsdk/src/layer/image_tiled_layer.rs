@@ -30,8 +30,8 @@ pub struct ImageTiledLayer {
 
     requesting_tile_ids: Arc<DashSet<TileId>>,
 
-    image_tiles_cache: Cache<TileId, DynamicImage>,
-    image_tiles: Arc<DashMap<TileId, DynamicImage>>,
+    tiles_cache: Cache<TileId, DynamicImage>,
+    tiles: Arc<DashMap<TileId, DynamicImage>>,
 }
 
 impl ImageTiledLayer {
@@ -50,8 +50,8 @@ impl ImageTiledLayer {
 
             requesting_tile_ids: Arc::new(DashSet::new()),
 
-            image_tiles_cache: Cache::new(cache_size),
-            image_tiles: Arc::new(DashMap::new()),
+            tiles_cache: Cache::new(cache_size),
+            tiles: Arc::new(DashMap::new()),
         }
     }
 }
@@ -73,7 +73,7 @@ impl Layer for ImageTiledLayer {
         self.tile_fetcher = Some(HttpPool::new(self.options.concurrent, tile_response_sender));
 
         self.tile_response_handle = Some(env::spawn({
-            let image_tiles_cache = self.image_tiles_cache.clone();
+            let tiles_cache = self.tiles_cache.clone();
             let requesting_tile_ids = self.requesting_tile_ids.clone();
             let event_sender = self.event_sender.clone();
 
@@ -86,7 +86,7 @@ impl Layer for ImageTiledLayer {
                         if let Ok(bytes) = http_response.bytes().await {
                             if let Ok(image) = image::load_from_memory(&bytes) {
                                 log::debug!("Image tile {} loaded", tile_id.to_string());
-                                image_tiles_cache.insert(tile_id.clone(), image);
+                                tiles_cache.insert(tile_id.clone(), image);
 
                                 requesting_tile_ids.remove(&tile_id);
 
@@ -153,9 +153,9 @@ impl Layer for ImageTiledLayer {
 
         // Load tiles from cache if possible
         tile_ids.iter().for_each(|tile_id| {
-            if !self.image_tiles.contains_key(tile_id) {
-                if let Some(image_tile) = self.image_tiles_cache.get(tile_id) {
-                    self.image_tiles.insert(tile_id.clone(), image_tile.clone());
+            if !self.tiles.contains_key(tile_id) {
+                if let Some(tile) = self.tiles_cache.get(tile_id) {
+                    self.tiles.insert(tile_id.clone(), tile.clone());
                 }
             }
         });
@@ -164,7 +164,7 @@ impl Layer for ImageTiledLayer {
         {
             let mut load_tile_ids = tile_ids
                 .iter()
-                .filter(|tile_id| !self.image_tiles.contains_key(&tile_id))
+                .filter(|tile_id| !self.tiles.contains_key(&tile_id))
                 .collect::<Vec<_>>();
 
             load_tile_ids.sort_by_key(|tile_id| {
@@ -205,48 +205,48 @@ impl Layer for ImageTiledLayer {
         {
             let mut dirty_tiles: HashSet<TileId> = HashSet::new();
 
-            for pair in self.image_tiles.iter() {
+            for pair in self.tiles.iter() {
                 let tile_id = pair.key();
+
+                if !tile_ids.contains(tile_id) {
+                    dirty_tiles.insert(tile_id.clone());
+                }
 
                 if let Some(bbox) = map_options.tiling.get_tile_bbox(&tile_id) {
                     if !bbox.to_polygon().intersects(map_state.view_bounds()) {
                         dirty_tiles.insert(tile_id.clone());
                     }
                 }
-
-                if tile_id.z == map_state.zoom {
-                    if !tile_ids.contains(tile_id) {
-                        dirty_tiles.insert(tile_id.clone());
-                    }
-                } else {
-                    dirty_tiles.insert(tile_id.clone());
-                }
             }
 
             // Keep resample tiles if possible
-            for tile_id in &tile_ids {
-                if !self.image_tiles.contains_key(tile_id) {
-                    let mut roll_up_resampled = false;
-
+            'tiles: for tile_id in tile_ids {
+                if !self.tiles.contains_key(&tile_id) {
                     for level in 1..=5 {
                         if let Some(parent_tile_id) =
-                            map_options.tiling.roll_up_tile_id(tile_id, level)
+                            map_options.tiling.roll_up_tile_id(&tile_id, level)
                         {
-                            if self.image_tiles.contains_key(&parent_tile_id) {
+                            if let Some(parent_tile) = self.tiles_cache.get(&parent_tile_id) {
+                                self.tiles.insert(parent_tile_id.clone(), parent_tile);
+
                                 dirty_tiles.remove(&parent_tile_id);
-                                roll_up_resampled = true;
-                                break;
+
+                                let cover_tile_ids = map_options
+                                    .tiling
+                                    .drill_down_tile_ids(&parent_tile_id, level);
+                                for cover_tile_id in cover_tile_ids {
+                                    dirty_tiles.insert(cover_tile_id);
+                                }
+
+                                continue 'tiles;
                             }
                         }
                     }
 
-                    if roll_up_resampled {
-                        continue;
-                    }
-
-                    let child_tile_ids = map_options.tiling.drill_down_tile_ids(tile_id, 1);
-                    if child_tile_ids.len() > 0 {
-                        for child_tile_id in child_tile_ids {
+                    let child_tile_ids = map_options.tiling.drill_down_tile_ids(&tile_id, 1);
+                    for child_tile_id in child_tile_ids {
+                        if let Some(child_tile) = self.tiles_cache.get(&child_tile_id) {
+                            self.tiles.insert(child_tile_id.clone(), child_tile);
                             dirty_tiles.remove(&child_tile_id);
                         }
                     }
@@ -254,13 +254,13 @@ impl Layer for ImageTiledLayer {
             }
 
             for tile_id in dirty_tiles {
-                self.image_tiles.remove(&tile_id);
+                self.tiles.remove(&tile_id);
 
                 map_renderer.remove_layer_draw_item(&self.name, &tile_id);
             }
         }
 
-        for pair in self.image_tiles.iter() {
+        for pair in self.tiles.iter() {
             let tile_id = pair.key();
             let image = pair.value();
 

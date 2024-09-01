@@ -16,9 +16,11 @@ use crate::{
         tessellation::vector_tile::{VectorTileShapeMeta, VectorTileTessellation},
         DrawItem, InterRenderers, MapOptions, MapRenderer, MapRenderingContext, MapState,
     },
+    tiling::TileId,
 };
 
 pub struct VectorTileDrawable {
+    pub tile_id: TileId,
     pub z: f32,
     pub layers_shape_styles: Vec<(String, ShapeStyles)>,
 
@@ -36,6 +38,7 @@ pub struct VectorTileDrawable {
 
 impl VectorTileDrawable {
     pub fn new(
+        tile_id: &TileId,
         vector_tile_tessellation: &VectorTileTessellation,
         z: f64,
         layers_shape_styles: &Vec<(String, ShapeStyles)>,
@@ -94,6 +97,7 @@ impl VectorTileDrawable {
         );
 
         Self {
+            tile_id: tile_id.clone(),
             z: z as f32,
             layers_shape_styles: layers_shape_styles.clone(),
 

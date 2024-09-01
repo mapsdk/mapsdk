@@ -408,8 +408,9 @@ impl VectorTileRenderer {
                 occlusion_query_set: None,
             });
 
+            let tile_zoom = vector_tile_drawable.tile_id.z;
             let zoom_scale =
-                (map_state.zoom_res / map_options.tiling.get_resolution(map_state.zoom)) as f32;
+                (map_state.zoom_res / map_options.tiling.get_resolution(tile_zoom)) as f32;
             let vt_pixel_ratio = zoom_scale * 4096.0
                 / map_options.tiling.tile_size() as f32
                 / map_renderer.rendering_context.pixel_ratio as f32;
