@@ -4,7 +4,7 @@ use std::sync::{
 };
 
 use geo::Rect;
-use image::DynamicImage;
+use image::RgbaImage;
 use nanoid::nanoid;
 use tokio::sync::mpsc;
 
@@ -26,7 +26,7 @@ pub struct ImageLayer {
     event_sender: Option<mpsc::UnboundedSender<Event>>,
 
     image_id: String,
-    image: Arc<RwLock<Option<DynamicImage>>>,
+    image: Arc<RwLock<Option<RgbaImage>>>,
     image_requested: bool,
     image_updated: Arc<AtomicBool>,
 }
@@ -91,7 +91,7 @@ impl Layer for ImageLayer {
                             log::debug!("Image loaded from {}", url);
 
                             if let Ok(mut image) = image.write() {
-                                image.replace(img);
+                                image.replace(img.into());
                                 image_updated.store(true, Ordering::SeqCst);
 
                                 if let Some(event_sender) = event_sender {

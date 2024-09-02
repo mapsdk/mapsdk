@@ -2,7 +2,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use dashmap::{DashMap, DashSet};
 use geo::Intersects;
-use image::DynamicImage;
+use image::RgbaImage;
 use moka::sync::Cache;
 use tokio::{sync::mpsc, task::JoinHandle};
 
@@ -30,8 +30,8 @@ pub struct ImageTiledLayer {
 
     requesting_tile_ids: Arc<DashSet<TileId>>,
 
-    tiles_cache: Cache<TileId, DynamicImage>,
-    tiles: Arc<DashMap<TileId, DynamicImage>>,
+    tiles_cache: Cache<TileId, RgbaImage>,
+    tiles: Arc<DashMap<TileId, RgbaImage>>,
 }
 
 impl ImageTiledLayer {
@@ -84,16 +84,24 @@ impl Layer for ImageTiledLayer {
                     if let Some(http_response) = http_response {
                         let tile_id = http_response.id.clone();
                         if let Ok(bytes) = http_response.bytes().await {
-                            if let Ok(image) = image::load_from_memory(&bytes) {
-                                log::debug!("Image tile {} loaded", tile_id.to_string());
-                                tiles_cache.insert(tile_id.clone(), image);
+                            requesting_tile_ids.remove(&tile_id);
 
-                                requesting_tile_ids.remove(&tile_id);
+                            env::spawn({
+                                let tiles_cache = tiles_cache.clone();
+                                let event_sender = event_sender.clone();
 
-                                if let Some(event_sender) = &event_sender {
-                                    let _ = event_sender.send(Event::MapRequestRedraw);
+                                async move {
+                                    if let Ok(image) = image::load_from_memory(&bytes) {
+                                        let tile = image.to_rgba8();
+
+                                        tiles_cache.insert(tile_id.clone(), tile);
+
+                                        if let Some(event_sender) = &event_sender {
+                                            let _ = event_sender.send(Event::MapRequestRedraw);
+                                        }
+                                    }
                                 }
-                            }
+                            });
                         }
                     }
                 }

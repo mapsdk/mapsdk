@@ -1,5 +1,5 @@
 use geo::Rect;
-use image::DynamicImage;
+use image::RgbaImage;
 use wgpu::*;
 
 use crate::render::{
@@ -24,7 +24,7 @@ pub struct ImageDrawable {
 }
 
 impl ImageDrawable {
-    pub fn new(map_renderer: &MapRenderer, image: &DynamicImage, bbox: &Rect, z: f64) -> Self {
+    pub fn new(map_renderer: &MapRenderer, image: &RgbaImage, bbox: &Rect, z: f64) -> Self {
         let MapRenderingContext { device, queue, .. } = &map_renderer.rendering_context;
 
         let width = image.width();
@@ -38,7 +38,7 @@ impl ImageDrawable {
                 origin: Origin3d::ZERO,
                 aspect: TextureAspect::All,
             },
-            &image.to_rgba8(),
+            &image,
             ImageDataLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * width),
