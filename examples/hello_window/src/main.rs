@@ -69,7 +69,7 @@ impl ApplicationHandler for App {
                 let image_layer_options = ImageLayerOptions::default()
                     .with_headers(&headers)
                     .with_z(-100.0);
-                let image_layer = ImageLayer::new(
+                let _image_layer = ImageLayer::new(
                     "http://a.tile.osm.org/0/0/0.png",
                     Rect::new(
                         Coord {

@@ -31,9 +31,7 @@ pub enum Canvas {
     Window(Window),
 }
 
-pub type JsonValue = serde_json::value::Value;
-
-pub(crate) trait CoordType: Debug + num_traits::Float {
+pub trait CoordType: Debug + num_traits::Float {
     fn num_max() -> Self;
     fn num_min() -> Self;
     fn to_f32(self) -> f32;
@@ -66,3 +64,5 @@ impl CoordType for f32 {
         self
     }
 }
+
+pub type JsonValue = serde_json::value::Value;

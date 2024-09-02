@@ -1,4 +1,3 @@
-use image::DynamicImage;
 use wgpu::*;
 
 pub fn create_depth_texture(device: &Device, width: u32, height: u32) -> Texture {

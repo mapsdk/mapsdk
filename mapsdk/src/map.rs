@@ -27,12 +27,9 @@ pub struct Map {
     pub options: MapOptions,
 
     pub(crate) context: Arc<Mutex<MapContext>>,
-    pub(crate) context_redraw_seq: Arc<AtomicU64>,
-    pub(crate) redraw_seq: Arc<AtomicU64>,
     pub(crate) event_sender: mpsc::UnboundedSender<Event>,
 
     event_handle: JoinHandle<()>,
-    redraw_handle: JoinHandle<()>,
 
     anim_handle: Option<JoinHandle<()>>,
 }
@@ -93,7 +90,7 @@ impl Map {
         assert!(options.max_frame_rate > 0 && options.max_frame_rate <= 1000);
         let frame_interval = 1000 / options.max_frame_rate as u64;
 
-        let redraw_handle = env::spawn({
+        env::spawn({
             let context = context.clone();
             let context_redraw_seq = context_redraw_seq.clone();
             let redraw_seq = redraw_seq.clone();
@@ -129,13 +126,9 @@ impl Map {
             options: options.clone(),
 
             context,
-            context_redraw_seq,
-            redraw_seq,
             event_sender,
 
             event_handle,
-            redraw_handle,
-
             anim_handle: None,
         }
     }

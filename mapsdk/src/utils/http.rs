@@ -86,7 +86,6 @@ impl<T> HttpResponse<T> {
 }
 
 struct HttpRequestWorker {
-    id: String,
     handle: JoinHandle<()>,
 }
 
@@ -144,7 +143,7 @@ impl HttpRequestWorker {
             }
         });
 
-        Self { id, handle }
+        Self { handle }
     }
 
     fn abort(&self) {
@@ -153,12 +152,10 @@ impl HttpRequestWorker {
 }
 
 pub struct HttpPool<T: Clone + Debug + Eq + Hash> {
-    id: String,
     size: usize,
 
     request_queue: Arc<std::sync::Mutex<PriorityQueue<HttpRequest<T>, Reverse<SystemTime>>>>,
     request_workers: Vec<HttpRequestWorker>,
-    response_sender: mpsc::UnboundedSender<HttpResponse<T>>,
 
     request_queue_handle: JoinHandle<()>,
 }
@@ -219,12 +216,10 @@ impl<T: Clone + Debug + Eq + Hash + Send + 'static> HttpPool<T> {
         });
 
         Self {
-            id,
             size,
 
             request_queue,
             request_workers,
-            response_sender,
 
             request_queue_handle,
         }
@@ -248,6 +243,10 @@ impl<T: Clone + Debug + Eq + Hash + Send + 'static> HttpPool<T> {
         if let Ok(mut request_queue) = self.request_queue.lock() {
             request_queue.push(request, Reverse(SystemTime::now()));
         }
+    }
+
+    pub fn size(&self) -> usize {
+        self.size
     }
 }
 
