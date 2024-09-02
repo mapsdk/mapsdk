@@ -103,7 +103,13 @@ impl ApplicationHandler for App {
                                 ..Default::default()
                             },
                         ),
-                        ("countries", ShapeStyles::default()),
+                        (
+                            "countries",
+                            ShapeStyles {
+                                fill_color: Color::from_rgba(0, 0, 0, 0.5),
+                                ..Default::default()
+                            },
+                        ),
                     ]);
                 let vector_tiled_layer = VectorTiledLayer::new(
                     "https://demotiles.maplibre.org/tiles/{z}/{x}/{y}.pbf",
@@ -113,6 +119,7 @@ impl ApplicationHandler for App {
 
                 let feature_layer_options =
                     FeatureLayerOptions::default().with_shape_styles(ShapeStyles {
+                        stroke_color: Color::from_rgb(200, 200, 200),
                         outline_align: OutlineAlign::Side,
                         ..Default::default()
                     });

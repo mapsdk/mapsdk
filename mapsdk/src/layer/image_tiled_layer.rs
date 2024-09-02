@@ -222,20 +222,31 @@ impl Layer for ImageTiledLayer {
             // Keep resample tiles if possible
             'tiles: for tile_id in tile_ids {
                 if !self.tiles.contains_key(&tile_id) {
-                    for level in 1..=5 {
+                    for level in 1..=self.options.max_up_scale_level {
                         if let Some(parent_tile_id) =
                             map_options.tiling.roll_up_tile_id(&tile_id, level)
                         {
                             if let Some(parent_tile) = self.tiles_cache.get(&parent_tile_id) {
-                                self.tiles.insert(parent_tile_id.clone(), parent_tile);
+                                for up_level in level + 1..=self.options.max_up_scale_level {
+                                    if let Some(up_tile_id) =
+                                        map_options.tiling.roll_up_tile_id(&tile_id, up_level)
+                                    {
+                                        if self.tiles.contains_key(&up_tile_id)
+                                            && !dirty_tiles.contains(&up_tile_id)
+                                        {
+                                            continue 'tiles;
+                                        }
+                                    }
+                                }
 
+                                self.tiles.insert(parent_tile_id.clone(), parent_tile);
                                 dirty_tiles.remove(&parent_tile_id);
 
-                                let cover_tile_ids = map_options
-                                    .tiling
-                                    .drill_down_tile_ids(&parent_tile_id, level);
-                                for cover_tile_id in cover_tile_ids {
-                                    dirty_tiles.insert(cover_tile_id);
+                                for cover_level in 1..=level {
+                                    let cover_tile_ids = map_options
+                                        .tiling
+                                        .drill_down_tile_ids(&parent_tile_id, cover_level);
+                                    dirty_tiles.extend(cover_tile_ids);
                                 }
 
                                 continue 'tiles;
@@ -279,6 +290,7 @@ pub struct ImageTiledLayerOptions {
     cache_size: u64,
     concurrent: usize,
     headers: Vec<(String, String)>,
+    max_up_scale_level: u32,
     url_subdomains: Option<Vec<String>>,
     z: f64,
 }
@@ -302,6 +314,11 @@ impl ImageTiledLayerOptions {
         self
     }
 
+    pub fn with_max_up_scale_level(mut self, v: u32) -> Self {
+        self.max_up_scale_level = v;
+        self
+    }
+
     pub fn with_url_subdomains(mut self, v: &Vec<impl ToString>) -> Self {
         self.url_subdomains = Some(v.iter().map(|s| s.to_string()).collect());
         self
@@ -319,6 +336,7 @@ impl Default for ImageTiledLayerOptions {
             cache_size: 512,
             concurrent: 8,
             headers: Vec::new(),
+            max_up_scale_level: 5,
             url_subdomains: None,
             z: 0.0,
         }
